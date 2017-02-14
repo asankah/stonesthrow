@@ -23,6 +23,7 @@ type Config struct {
 	MbConfigName      string // MultiBuild configuration name. See //src/tools/mb
 	Platform          string // Platform string. Should be one of the supported platforms.
 	MasterHostname    string // Hostname of master host running sshd.
+	GitRemote         string // Remote master name as known to Git.
 	IsMaster          bool   // Is this the master?
 	MaxBuildJobs      int    // Maximum number of jobs to use. Set to 0 to use default.
 }

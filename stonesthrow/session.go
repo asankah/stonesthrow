@@ -153,7 +153,7 @@ func (s *Session) SyncWorkdir(targetHash string) error {
 		return err
 	}
 
-	err = s.runCommandAndStreamOutput("git", "fetch", "asanka", "--progress",
+	err = s.runCommandAndStreamOutput("git", "fetch", s.config.GitRemote, "--progress",
 		"+BUILDER_HEAD:BUILDER_HEAD",
 		"refs/remotes/origin/master:refs/heads/origin")
 	if err != nil {
