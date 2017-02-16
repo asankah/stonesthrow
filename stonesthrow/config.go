@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,6 +11,15 @@ import (
 	"runtime"
 	"strings"
 )
+
+type ConfigError struct {
+	ConfigFile string
+	ErrorString string
+}
+
+func (c ConfigError) Error() string {
+	return fmt.Sprintf("Configuration error: %s: %s", c.ConfigFile, c.ErrorString)
+}
 
 type Config struct {
 	Hostname          string // Hostname
@@ -24,8 +32,16 @@ type Config struct {
 	Platform          string // Platform string. Should be one of the supported platforms.
 	MasterHostname    string // Hostname of master host running sshd.
 	GitRemote         string // Remote master name as known to Git.
-	IsMaster          bool   // Is this the master?
 	MaxBuildJobs      int    // Maximum number of jobs to use. Set to 0 to use default.
+	ConfigurationFile string // Configuration file where this Config came from.
+}
+
+func (c *Config) newError(s string, v ...interface{}) error {
+	configFile := c.ConfigurationFile
+	if configFile == "" {
+		configFile = "<unknown configuration file>"
+	}
+	return ConfigError{ ConfigFile: configFile, ErrorString: fmt.Sprintf(s, v...)}
 }
 
 func (c *Config) IsValid() bool {
@@ -33,7 +49,14 @@ func (c *Config) IsValid() bool {
 		c.Platform != "" &&
 		c.MbConfigName != "" &&
 		c.SourcePath != "" &&
-		c.BuildPath != ""
+		c.BuildPath != "" &&
+		c.Hostname != "" &&
+		c.MasterHostname != "" &&
+		(c.IsMaster() || c.GitRemote != "")
+}
+
+func (c *Config) IsMaster() bool {
+	return c.Hostname != "" && c.Hostname == c.MasterHostname
 }
 
 func (c *Config) GetListenAddress() string {
@@ -61,10 +84,11 @@ func (c *Config) GetDefaultPlatform(configMap map[string]Config) (string, error)
 		}
 	}
 
-	return "", fmt.Errorf("Can't determine default platform. Tried hostname %s", hostname)
+	return "", c.newError("Can't determine default platform. Tried hostname %s", hostname)
 }
 
 func (c *Config) ReadFrom(filename, platform string) error {
+	c.ConfigurationFile = filename
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("Can't read configuration file %s : %s", filename, err.Error())
@@ -78,7 +102,7 @@ func (c *Config) ReadFrom(filename, platform string) error {
 
 	masterConfig, hasKey := configs["master"]
 	if !hasKey {
-		return errors.New("No 'master' entry.")
+		return c.newError("No 'master' entry.")
 	}
 	c.MasterHostname = masterConfig.Hostname
 
@@ -91,7 +115,7 @@ func (c *Config) ReadFrom(filename, platform string) error {
 
 	platformConfig, hasKey := configs[platform]
 	if !hasKey {
-		return fmt.Errorf("Unknown platform : %s", platform)
+		return c.newError("Unknown platform : %s", platform)
 	}
 
 	c.MergeFrom(&platformConfig)
@@ -99,27 +123,27 @@ func (c *Config) ReadFrom(filename, platform string) error {
 
 	hostConfig, hasKey := configs[c.Hostname]
 	if !hasKey {
-		return fmt.Errorf("Unknown Hostname : %s", c.Hostname)
+		return c.newError("Unknown Hostname : %s", c.Hostname)
 	}
 	c.MergeFrom(&hostConfig)
-	if c.Hostname == c.MasterHostname {
-		c.IsMaster = true
-	}
 
 	if c.SourcePath == "" {
-		return errors.New("Source path is empty")
+		return c.newError("Source path is empty")
 	}
 	if c.MbConfigName == "" {
-		return errors.New("MB config missing")
+		return c.newError("MB config missing")
 	}
 	if c.ServerPort == 0 {
-		return errors.New("No server port")
+		return c.newError("No server port")
 	}
 	if c.RelativeBuildPath == "" {
 		c.RelativeBuildPath = filepath.Join("out", fmt.Sprintf("%s-gn", platform))
 	}
 	if c.BuildPath == "" {
 		c.BuildPath = filepath.Join(c.SourcePath, c.RelativeBuildPath)
+	}
+	if !c.IsValid() {
+		return c.newError("Required fields missing")
 	}
 	return nil
 }
@@ -151,6 +175,18 @@ func (c *Config) MergeFrom(other *Config) {
 
 	if other.MbConfigName != "" {
 		c.MbConfigName = other.MbConfigName
+	}
+	
+	if other.GitRemote != "" {
+		c.GitRemote = other.GitRemote
+	}
+
+	if other.MasterHostname != "" {
+		c.MasterHostname = other.MasterHostname
+	}
+
+	if other.MaxBuildJobs != 0 {
+		c.MaxBuildJobs = other.MaxBuildJobs
 	}
 }
 

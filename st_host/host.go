@@ -65,7 +65,7 @@ func main() {
 			"--platform", *platform,
 			"--packagepath", packagePath,
 			"--config", *configFile,
-			fmt.Sprintf("--update=%t", !config.IsMaster))
+			fmt.Sprintf("--update=%t", !config.IsMaster()))
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

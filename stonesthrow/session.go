@@ -133,7 +133,7 @@ func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
 
 func (s *Session) SyncWorkdir(targetHash string) error {
 	// Nothing to do if this is the master branch.
-	if s.config.IsMaster {
+	if s.config.IsMaster() {
 		s.channel.Info("Skipping sync on master")
 		return nil
 	}
@@ -366,7 +366,7 @@ func (s *Session) updateGitWorkDir(workDir string) error {
 }
 
 func (s *Session) GitRebaseUpdate(fetch bool) error {
-	if !s.config.IsMaster {
+	if !s.config.IsMaster() {
 		return OnlyOnMasterError
 	}
 

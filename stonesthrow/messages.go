@@ -40,6 +40,7 @@ type Repository struct {
 
 type CommandListMessage struct {
 	Synposis     string                `json:"synopsis"`
+	ConfigFile   string                `json:"config,omitempty"`
 	Commands     map[string]Command    `json:"commands"`
 	Repositories map[string]Repository `json:"repositories"`
 }

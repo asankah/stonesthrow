@@ -212,6 +212,8 @@ func (f *ConsoleFormatter) Format(message interface{}) error {
 
 	case *stonesthrow.CommandListMessage:
 		f.Show("help", `{{if .Synposis}}{{.Synposis}}
+{{end}}{{if .ConfigFile}}
+  {{heading "Configuration"}}: {{.ConfigFile}}
 {{end}}
 {{if .Repositories}}  Repositories:{{range $repo, $r := .Repositories}}
     {{title $repo}}:
