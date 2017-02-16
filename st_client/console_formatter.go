@@ -205,7 +205,7 @@ func (f *ConsoleFormatter) Format(message interface{}) error {
 
 	case *stonesthrow.EndCommandMessage:
 		if t.ReturnCode != 0 {
-			f.Show("fail", `{{error "Failed"}}: Return code {{info .ReturnCode}}
+			f.Show("fail", `{{error "Failed"}}: Return code {{.ReturnCode | printf "%d" | info}}
 
 `, t)
 		}

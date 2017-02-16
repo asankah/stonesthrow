@@ -5,10 +5,12 @@ import (
 	"encoding/gob"
 	"io"
 	"log"
+	"sync"
 )
 
 type jsonConnection struct {
 	stream *bufio.ReadWriter
+	mut sync.Mutex
 	encoder *gob.Encoder
 	decoder *gob.Decoder
 }
@@ -25,12 +27,15 @@ type jsonWrapper struct {
 }
 
 func (c jsonConnection) Receive() (interface{}, error) {
+	var wrapper jsonWrapper
+
+	c.mut.Lock()
 	if c.decoder == nil {
 		c.decoder = gob.NewDecoder(c.stream)
 	}
-
-	var wrapper jsonWrapper
 	err := c.decoder.Decode(&wrapper)
+	c.mut.Unlock()
+
 	if err == io.EOF {
 		return nil, err
 	}
@@ -69,10 +74,6 @@ func (c jsonConnection) Receive() (interface{}, error) {
 
 func (c jsonConnection) Send(message interface{}) error {
 	var wrapper jsonWrapper
-	if c.encoder == nil {
-		c.encoder = gob.NewEncoder(c.stream)
-	}
-
 	switch t := message.(type) {
 	case TerminalOutputMessage:
 		wrapper.Output = &t
@@ -102,9 +103,14 @@ func (c jsonConnection) Send(message interface{}) error {
 		log.Fatalf("Unexpected message type")
 	}
 
+	c.mut.Lock()
+	if c.encoder == nil {
+		c.encoder = gob.NewEncoder(c.stream)
+	}
 	err := c.encoder.Encode(wrapper)
 	if err == nil {
 		c.stream.Flush()
 	}
+	c.mut.Unlock()
 	return err
 }
