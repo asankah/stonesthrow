@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
-	"stonesthrow/stonesthrow"
+	"github.com/asankah/stonesthrow"
 	"strings"
 )
 

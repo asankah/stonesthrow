@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"stonesthrow/stonesthrow"
+	"github.com/asankah/stonesthrow"
 	"strings"
 	"text/template"
 	"time"

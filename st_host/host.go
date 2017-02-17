@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"stonesthrow/stonesthrow"
+	"github.com/asankah/stonesthrow"
 )
 
 func main() {
