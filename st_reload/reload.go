@@ -43,7 +43,7 @@ func main() {
 
 	err = RunCommandAndWait("go", "get", "-u", packageToBuild)
 	if err != nil {
-		fmt.Printf(err)
+		fmt.Printf("Failed to run 'go get -u %s': %s", packageToBuild, err.Error())
 		os.Exit(1)
 	}
 
