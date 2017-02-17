@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 )
 
 func RunCommandAndWait(command string, args ...string) error {
@@ -38,7 +37,7 @@ func main() {
 
 	err = RunCommandAndWait("go", "get", "-u", *goPackage)
 	if err != nil {
-		fmt.Printf("Failed to run 'go get -u %s': %s", packageToBuild, err.Error())
+		fmt.Printf("Failed to run 'go get -u %s': %s", *goPackage, err.Error())
 		os.Exit(1)
 	}
 
