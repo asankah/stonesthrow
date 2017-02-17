@@ -21,11 +21,9 @@ func main() {
 		"Process ID of parent. Waits for the process with this ID to exit before doing anything.")
 	goPackage := flag.String("package", "",
 		"Path to Go package that will be updated. Runs 'go get -u <package>'.")
-	command := flag.String("command", "",
-		"Command to run after updating the package at <package>. Remaining arguments are passed along to <command>.")
 	flag.Parse()
 
-	if *parentProcess == -1 || *command == "" || *goPackage == "" {
+	if *parentProcess == -1 || *goPackage == "" || flag.NArg() == 0 {
 		fmt.Println("Invalid command line arguments")
 		os.Exit(1)
 	}
@@ -38,16 +36,14 @@ func main() {
 		proc.Release()
 	}
 
-	*goPackage = filepath.Clean(*goPackage)
-	packageToBuild := filepath.Base(*goPackage) + "/..."
-
-	err = RunCommandAndWait("go", "get", "-u", packageToBuild)
+	err = RunCommandAndWait("go", "get", "-u", *goPackage)
 	if err != nil {
 		fmt.Printf("Failed to run 'go get -u %s': %s", packageToBuild, err.Error())
 		os.Exit(1)
 	}
 
-	cmd := exec.Command(*command, flag.Args()...)
+	args := flag.Args()
+	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
