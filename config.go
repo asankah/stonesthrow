@@ -13,7 +13,7 @@ import (
 )
 
 type ConfigError struct {
-	ConfigFile string
+	ConfigFile  string
 	ErrorString string
 }
 
@@ -41,7 +41,7 @@ func (c *Config) newError(s string, v ...interface{}) error {
 	if configFile == "" {
 		configFile = "<unknown configuration file>"
 	}
-	return ConfigError{ ConfigFile: configFile, ErrorString: fmt.Sprintf(s, v...)}
+	return ConfigError{ConfigFile: configFile, ErrorString: fmt.Sprintf(s, v...)}
 }
 
 func (c *Config) IsValid() bool {
@@ -50,9 +50,12 @@ func (c *Config) IsValid() bool {
 		c.MbConfigName != "" &&
 		c.SourcePath != "" &&
 		c.BuildPath != "" &&
+		filepath.IsAbs(c.BuildPath) &&
 		c.Hostname != "" &&
 		c.MasterHostname != "" &&
-		(c.IsMaster() || c.GitRemote != "")
+		(c.IsMaster() || c.GitRemote != "") &&
+		filepath.IsAbs(c.SourcePath) &&
+		(c.GomaPath == "" || filepath.IsAbs(c.GomaPath))
 }
 
 func (c *Config) IsMaster() bool {
@@ -176,7 +179,7 @@ func (c *Config) MergeFrom(other *Config) {
 	if other.MbConfigName != "" {
 		c.MbConfigName = other.MbConfigName
 	}
-	
+
 	if other.GitRemote != "" {
 		c.GitRemote = other.GitRemote
 	}
@@ -260,4 +263,3 @@ func GetDefaultConfigFile() string {
 	}
 	return os.ExpandEnv("${HOME}/.stonesthrow")
 }
-
