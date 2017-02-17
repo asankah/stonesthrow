@@ -58,8 +58,8 @@ func main() {
 		log.Print("Launching st_reload to reload and update.")
 		cmd := exec.Command("st_reload",
 			"--pid", fmt.Sprintf("%d", os.Getpid()),
-			"--package", "github.com/asankah/stonesthrow", "st_host", "--",
-			"--platform", config.Platform, "--config", *configFile)
+			"--package", "github.com/asankah/stonesthrow",
+			"st_host", "--platform", config.Platform, "--config", *configFile)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
