@@ -3,10 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/asankah/stonesthrow"
 	"log"
 	"os"
 	"os/exec"
-	"github.com/asankah/stonesthrow"
 )
 
 func main() {
@@ -55,17 +55,12 @@ func main() {
 	server.Run(config)
 
 	if reload {
-		packagePath, err := stonesthrow.GetPackageRootPath()
-		if err != nil {
-			fmt.Printf("Can't determine package root path")
-			os.Exit(1)
-		}
 		log.Print("Launching st_reload to reload and update.")
-		cmd := exec.Command("st_reload", "--pid", fmt.Sprintf("%d", os.Getpid()),
-			"--platform", *platform,
-			"--packagepath", packagePath,
-			"--config", *configFile,
-			fmt.Sprintf("--update=%t", !config.IsMaster()))
+		cmd := exec.Command("st_reload",
+			"--pid", fmt.Sprintf("%d", os.Getpid()),
+			"--package", "github.com/asankah/stonesthrow",
+			"--command", "st_host",
+			"--platform", config.Platform, "--config", *configFile)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

@@ -261,13 +261,3 @@ func GetDefaultConfigFile() string {
 	return os.ExpandEnv("${HOME}/.stonesthrow")
 }
 
-func GetPackageRootPath() (string, error) {
-	goPath := os.Getenv("GOPATH")
-	packagePath := filepath.Join(goPath, "src", "stonesthrow")
-	_, err := os.Stat(packagePath)
-	if err != nil {
-		return "", nil
-	}
-
-	return packagePath, nil
-}
