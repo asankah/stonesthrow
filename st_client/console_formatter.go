@@ -69,7 +69,7 @@ func (f *ConsoleFormatter) AddPathRemappers() {
 	re := regexp.MustCompile(literalToRegex(f.config.SourcePath) + `[\w/\\_-]*`)
 	sourceLen := len(f.config.SourcePath)
 	sourcePathRewriter := func(s string) string {
-		return "//" + normalizePathSeparators(s[sourceLen:])
+		return "/" + normalizePathSeparators(s[sourceLen:])
 	}
 	f.AddFilter(func(s string) string {
 		return re.ReplaceAllStringFunc(s, sourcePathRewriter)

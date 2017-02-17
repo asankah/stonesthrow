@@ -1,0 +1,50 @@
+
+{
+	"linux": {
+		"ServerPort": 9761,
+		"MbConfigName": "debug_linux",
+		"Hostname": "a"
+	},
+
+	"android": {
+		"ServerPort": 9762,
+		"MbConfigName": "debug_android",
+		"Hostname": "a"
+	},
+
+	"win": {
+		"ServerPort": 9763,
+		"MbConfigName": "debug_win",
+		"Hostname": "asdf"
+	},
+
+	"mac": {
+		"ServerPort": 9764,
+		"MbConfigName": "debug_mac",
+		"Hostname": "macpro"
+	},
+
+	"a": {
+		"Platform": "linux",
+		"SourcePath": "/src",
+		"GomaPath": "/goma"
+	},
+
+	"macpro": {
+		"Platform": "mac",
+		"SourcePath": "/src/mac",
+		"GomaPath": "/Users/user/goma",
+		"GitRemote": "foo"
+	},
+
+	"asdf": {
+		"Platform": "win",
+		"SourcePath": "C:\\src",
+		"GomaPath": "C:\\goma",
+		"GitRemote": "foo"
+	},
+
+	"master": {
+		"Hostname": "a"
+	}
+}
