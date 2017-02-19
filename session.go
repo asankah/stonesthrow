@@ -36,7 +36,7 @@ type Session struct {
 }
 
 func (s *Session) runCommandAndStreamOutput(command ...string) error {
-	return s.runCommandWithWorkDirAndStreamOutput(s.config.SourcePath, command...)
+	return s.runCommandWithWorkDirAndStreamOutput(s.config.GetSourcePath(), command...)
 }
 
 func (s *Session) runCommandWithWorkDirAndStreamOutput(workDir string, command ...string) error {
@@ -81,8 +81,10 @@ func (s *Session) runMB(command ...string) error {
 	arguments := []string{
 		"python", s.config.GetSourcePath("tools", "mb", "mb.py"),
 		command[0],
-		"--goma-dir=" + s.config.GomaPath,
-		"--config=" + s.config.MbConfigName}
+		"--config=" + s.config.Platform.MbConfigName}
+	if s.config.Host.GomaPath != "" {
+		arguments = append(arguments, "--goma-dir", s.config.Host.GomaPath)
+	}
 	arguments = append(arguments, command[1:]...)
 	return s.runCommandAndStreamOutput(arguments...)
 }
@@ -117,7 +119,7 @@ func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
 	if testOnly {
 		command = append(command, "--testonly=true")
 	}
-	allLabels, err := s.config.RunInSourceDir(command...)
+	allLabels, err := s.config.Repository.RunHere(command...)
 	if err != nil {
 		return nil, err
 	}
@@ -132,28 +134,27 @@ func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
 }
 
 func (s *Session) SyncWorkdir(targetHash string) error {
-	// Nothing to do if this is the master branch.
-	if s.config.IsMaster() {
+	// Nothing to do if there is no master.
+	if s.config.Repository.GitRemote == "" {
 		s.channel.Info("Skipping sync on master")
 		return nil
 	}
 
-	currentWorkTree, err := s.config.GitGetEffectiveWorkTree()
+	currentWorkTree, err := s.config.Repository.GitCreateWorkTree()
 	if err != nil {
 		return err
 	}
-	targetWorkTree, err := s.config.GitGetTreeFromRevision(targetHash)
+	targetWorkTree, err := s.config.Repository.GitRevision(fmt.Sprintf("%s^{tree}", targetHash))
 	if err == nil && currentWorkTree == targetWorkTree {
 		return nil
 	}
 
-	s.channel.Info("Updating Chromium")
-	oldDepsHash, err := s.config.RunInSourceDir("git", "hash-object", "DEPS")
+	oldDepsHash, err := s.config.Repository.RunHere("git", "hash-object", "DEPS")
 	if err != nil {
 		return err
 	}
 
-	err = s.runCommandAndStreamOutput("git", "fetch", s.config.GitRemote, "--progress",
+	err = s.runCommandAndStreamOutput("git", "fetch", s.config.Repository.GitRemote, "--progress",
 		"+BUILDER_HEAD:BUILDER_HEAD",
 		"refs/remotes/origin/master:refs/heads/origin")
 	if err != nil {
@@ -166,7 +167,7 @@ func (s *Session) SyncWorkdir(targetHash string) error {
 		return err
 	}
 
-	newDepsHash, err := s.config.RunInSourceDir("git", "hash-object", "DEPS")
+	newDepsHash, err := s.config.Repository.RunHere("git", "hash-object", "DEPS")
 	if err != nil {
 		return err
 	}
@@ -178,7 +179,7 @@ func (s *Session) SyncWorkdir(targetHash string) error {
 }
 
 func (s *Session) RunGclientSync() error {
-	if s.config.Platform == "mac" {
+	if s.config.PlatformName == "mac" {
 		os.Setenv("FORCE_MAC_TOOLCHAIN", "1")
 	}
 	return s.runCommandAndStreamOutput("gclient", "sync")
@@ -205,11 +206,11 @@ func (s *Session) EnsureGomaIfNecessary() error {
 		stampFile.Close()
 	}
 
-	if s.config.Platform == "win" {
+	if s.config.PlatformName == "win" {
 		attemptedToStartGoma := false
-		gomaCommand := []string{path.Join(s.config.GomaPath, "goma_ctl.bat")}
+		gomaCommand := []string{path.Join(s.config.Host.GomaPath, "goma_ctl.bat")}
 		for i := 0; i < 5; i += 1 {
-			output, err := s.config.RunInSourceDir(append(gomaCommand, "status")...)
+			output, err := s.config.Repository.RunHere(append(gomaCommand, "status")...)
 			if err != nil {
 				return err
 			}
@@ -234,7 +235,7 @@ func (s *Session) EnsureGomaIfNecessary() error {
 		return TimedOutError
 	} else {
 		return s.runCommandAndStreamOutput(
-			path.Join(s.config.GomaPath, "goma_ctl.py"), "ensure_start")
+			path.Join(s.config.Host.GomaPath, "goma_ctl.py"), "ensure_start")
 	}
 }
 
@@ -256,8 +257,8 @@ func (s *Session) BuildTargets(targets ...string) error {
 	}
 
 	command := []string{"ninja", "-C", s.config.GetBuildPath()}
-	if s.config.MaxBuildJobs != 0 {
-		command = append(command, "-j", fmt.Sprintf("%d", s.config.MaxBuildJobs))
+	if s.config.Host.MaxBuildJobs != 0 {
+		command = append(command, "-j", fmt.Sprintf("%d", s.config.Host.MaxBuildJobs))
 	}
 	command = append(command, targets...)
 	return s.runCommandAndStreamOutput(command...)
@@ -366,11 +367,11 @@ func (s *Session) updateGitWorkDir(workDir string) error {
 }
 
 func (s *Session) GitRebaseUpdate(fetch bool) error {
-	if !s.config.IsMaster() {
+	if s.config.Repository.GitRemote != "" {
 		return OnlyOnMasterError
 	}
 
-	output, err := s.config.RunInSourceDir("git", "status", "--porcelain",
+	output, err := s.config.Repository.RunHere("git", "status", "--porcelain",
 		"--untracked-files=normal")
 	if err != nil {
 		return err
@@ -384,7 +385,7 @@ func (s *Session) GitRebaseUpdate(fetch bool) error {
 	// Ignoring error here since we should be able to run rebase-update with a
 	// detached head. If there's no symolic ref, then we'll skip the final
 	// checkout step.
-	previousHead, _ := s.config.RunInSourceDir("git", "symbolic-ref", "-q", "HEAD")
+	previousHead, _ := s.config.Repository.RunHere("git", "symbolic-ref", "-q", "HEAD")
 
 	if fetch {
 		err = s.updateGitWorkDir(s.config.GetSourcePath("clank"))

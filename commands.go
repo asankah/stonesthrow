@@ -77,7 +77,7 @@ func handleHelp(s *Session, req RequestMessage) error {
 	var chromeRepo Repository
 	chromeRepo.BuildPath = s.config.GetBuildPath()
 	chromeRepo.SourcePath = s.config.GetSourcePath()
-	chromeRepo.Revistion, _ = s.config.GitGetRevision("HEAD")
+	chromeRepo.Revistion, _ = s.config.Repository.GitRevision("HEAD")
 	commandList.Synposis = "Remote build runner"
 	commandList.ConfigFile = s.config.ConfigurationFile
 	commandList.Repositories["chrome"] = chromeRepo
@@ -134,7 +134,7 @@ func addDynamicHandlers(s *Session, handlerMap map[string]Handler) {
 		})
 	}
 
-	if s.config.IsMaster() {
+	if s.config.Repository.GitRemote == "" {
 		AddHandler("ru", `Run 'git rebase-update'.`,
 			func(s *Session, req RequestMessage) error {
 				fetch := true

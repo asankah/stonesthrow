@@ -6,19 +6,14 @@ import (
 	"net"
 )
 
-type Client struct {
-	serverConfig Config
-}
-
 type ResponseHandler func(interface{}) error
 
-func (c *Client) Run(serverConfig Config, request RequestMessage, handler ResponseHandler) error {
+func RunClient(serverConfig Config, request RequestMessage, handler ResponseHandler) error {
 	if !serverConfig.IsValid() {
 		return ConfigIncompleteError
 	}
-	c.serverConfig = serverConfig
 
-	conn, err := net.Dial("tcp", serverConfig.GetListenAddress())
+	conn, err := net.Dial(serverConfig.Platform.Network, serverConfig.Platform.Address)
 	if err != nil {
 		return err
 	}

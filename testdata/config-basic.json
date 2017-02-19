@@ -1,50 +1,61 @@
-
 {
-	"linux": {
-		"ServerPort": 9761,
-		"MbConfigName": "debug_linux",
-		"Hostname": "a"
+	"a.foo.example.com": {
+		"alias": [ "a.foo", "a" ],
+		"repositories": {
+			"chrome": {
+				"src": "/usr/local/src/chrome/src",
+				"platforms": {
+					"linux": {
+						"address": "tcp,127.0.0.1:9761",
+						"out": "out/linux-gn",
+						"mb_config": "debug_bot"
+					},
+					"android": {
+						"address": "tcp,127.0.0.1:9762",
+						"out": "out/android-gn",
+						"mb_config": "android_debug_bot"
+					}
+				}
+			}
+		},
+		"goma_path": "/home/user/goma"
 	},
 
-	"android": {
-		"ServerPort": 9762,
-		"MbConfigName": "debug_android",
-		"Hostname": "a"
+	"b.foo.example.com": {
+		"alias": [ "mac", "b" ],
+		"repositories": {
+			"chrome": {
+				"src": "/src/chrome/src",
+				"platforms": {
+					"mac": {
+						"address": "tcp,127.0.0.1:9763",
+						"out": "out/mac-gn",
+						"mb_config": "debug_bot"
+					}
+				},
+				"git_remote": "a",
+				"git_hostname": "a"
+			}
+		},
+		"goma_path": "/Users/user/goma"
 	},
 
-	"win": {
-		"ServerPort": 9763,
-		"MbConfigName": "debug_win",
-		"Hostname": "asdf"
-	},
-
-	"mac": {
-		"ServerPort": 9764,
-		"MbConfigName": "debug_mac",
-		"Hostname": "macpro"
-	},
-
-	"a": {
-		"Platform": "linux",
-		"SourcePath": "/src",
-		"GomaPath": "/goma"
-	},
-
-	"macpro": {
-		"Platform": "mac",
-		"SourcePath": "/src/mac",
-		"GomaPath": "/Users/user/goma",
-		"GitRemote": "foo"
-	},
-
-	"asdf": {
-		"Platform": "win",
-		"SourcePath": "C:\\src",
-		"GomaPath": "C:\\goma",
-		"GitRemote": "foo"
-	},
-
-	"master": {
-		"Hostname": "a"
+	"c.foo.example.com": {
+		"alias": [ "c" ],
+		"repositories": {
+			"chrome": {
+				"src": "C:\\src\\chrome\\src",
+				"platforms": {
+					"win": {
+						"address": "tcp,127.0.0.1:9764",
+						"out": "out/win-gn",
+						"mb_config": "debug_bot"
+					}
+				},
+				"git_remote": "a",
+				"git_hostname": "a"
+			}
+		},
+		"goma_path": "C:\\Users\\user\\goma"
 	}
 }

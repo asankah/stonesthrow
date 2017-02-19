@@ -12,7 +12,7 @@ import (
 )
 
 func getModifiedFiles(c *stonesthrow.Config) ([]string, error) {
-	gitStatus, err := c.RunInSourceDir("git", "status", "--porcelain=2",
+	gitStatus, err := c.Repository.RunHere("git", "status", "--porcelain=2",
 		"--untracked-files=no", "--ignore-submodules")
 	if err != nil {
 		return nil, err
@@ -64,40 +64,40 @@ func prepareBuilderHead(c *stonesthrow.Config) (string, error) {
 	if len(modifiedFiles) > 0 {
 		command := []string{"git", "update-index", "--"}
 		command = append(command, modifiedFiles...)
-		_, err = c.RunInSourceDir(command...)
+		_, err = c.Repository.RunHere(command...)
 		if err != nil {
 			return "", err
 		}
 
-		tree, err = c.RunInSourceDir("git", "write-tree")
+		tree, err = c.Repository.RunHere("git", "write-tree")
 		if err != nil {
 			return "", err
 		}
 	} else {
-		tree, err = c.GitGetTreeFromRevision("HEAD")
+		tree, err = c.Repository.GitRevision("HEAD^{tree}")
 		if err != nil {
 			return "", err
 		}
 	}
 
-	builderTree, err := c.GitGetTreeFromRevision("BUILDER_HEAD")
+	builderTree, err := c.Repository.GitRevision("BUILDER_HEAD^{tree}")
 	if err != nil || builderTree != tree {
-		headCommit, err := c.GitGetRevision("HEAD")
+		headCommit, err := c.Repository.GitRevision("HEAD")
 		if err != nil {
 			return "", err
 		}
-		revision, err := c.RunInSourceDir("git", "commit-tree", "-p", headCommit, "-m", "BUILDER_HEAD", tree)
+		revision, err := c.Repository.RunHere("git", "commit-tree", "-p", headCommit, "-m", "BUILDER_HEAD", tree)
 		if err != nil {
 			return "", err
 		}
-		_, err = c.RunInSourceDir("git", "update-ref", "refs/heads/BUILDER_HEAD", revision)
+		_, err = c.Repository.RunHere("git", "update-ref", "refs/heads/BUILDER_HEAD", revision)
 		if err != nil {
 			return "", err
 		}
 		log.Printf("Created BUILDER_HEAD %s", revision)
 		return revision, nil
 	} else {
-		return c.GitGetRevision("BUILDER_HEAD")
+		return c.Repository.GitRevision("BUILDER_HEAD")
 	}
 }
 
@@ -110,8 +110,8 @@ func main() {
 	defaultServerPlatform := path.Base(os.Args[0])
 	defaultConfig := stonesthrow.GetDefaultConfigFile()
 
-	clientPlatform := flag.String("client", "", "Client platform.")
 	serverPlatform := flag.String("server", defaultServerPlatform, "Server platform.")
+	repository := flag.String("repository", "", "Repository")
 	porcelain := flag.Bool("porcelain", false, "Porcelain.")
 	configFile := flag.String("config", defaultConfig, "Configuration file")
 	showConfig := flag.Bool("show_config", false, "Display configuration and exit")
@@ -129,21 +129,21 @@ func main() {
 	}
 
 	var clientConfig, serverConfig stonesthrow.Config
-	err := serverConfig.ReadFrom(*configFile, *serverPlatform)
+	err := serverConfig.ReadServerConfig(*configFile, *serverPlatform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	err = clientConfig.ReadFrom(*configFile, *clientPlatform)
+	err = clientConfig.ReadClientConfig(*configFile, *serverPlatform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	if *showConfig {
-		fmt.Printf("Client platform: %s\n", *clientPlatform)
-		fmt.Printf("Client configuration: %s\n", clientConfig.String())
-		fmt.Printf("Server platform: %s\n", *serverPlatform)
-		fmt.Printf("Server configuartion: %s\n", serverConfig.String())
+		fmt.Println("Client configuration:")
+		clientConfig.Dump(os.Stdout)
+		fmt.Println("Server configuration:")
+		serverConfig.Dump(os.Stdout)
 		return
 	}
 
@@ -161,9 +161,8 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	var client stonesthrow.Client
 	formatter := ConsoleFormatter{config: &serverConfig, porcelain: *porcelain}
-	err = client.Run(serverConfig, req, func(m interface{}) error {
+	err = stonesthrow.RunClient(serverConfig, req, func(m interface{}) error {
 		return formatter.Format(m)
 	})
 	if err != nil {

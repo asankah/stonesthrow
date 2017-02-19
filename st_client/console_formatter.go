@@ -66,8 +66,8 @@ func (f *ConsoleFormatter) DimProgress() {
 }
 
 func (f *ConsoleFormatter) AddPathRemappers() {
-	re := regexp.MustCompile(literalToRegex(f.config.SourcePath) + `[\w/\\_-]*`)
-	sourceLen := len(f.config.SourcePath)
+	re := regexp.MustCompile(literalToRegex(f.config.Repository.SourcePath) + `[\w/\\_-]*`)
+	sourceLen := len(f.config.Repository.SourcePath)
 	sourcePathRewriter := func(s string) string {
 		return "/" + normalizePathSeparators(s[sourceLen:])
 	}
@@ -157,7 +157,7 @@ func (f *ConsoleFormatter) GetTemplate(name string, templateValue string) (*temp
 			return strings.Split(s, "\n")
 		},
 		"platform": func() string {
-			return f.config.Platform
+			return f.config.PlatformName
 		},
 		"seconds": func(d time.Duration) string {
 			return fmt.Sprintf("%2.2f", time.Duration(d).Seconds())

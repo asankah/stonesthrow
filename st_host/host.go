@@ -11,6 +11,7 @@ import (
 
 func main() {
 	platform := flag.String("platform", "", "Platform to use. See code for valid platform values.")
+	repository := flag.String("repository", "", "Repository to use.")
 	configFile := flag.String("config", stonesthrow.GetDefaultConfigFile(), "Configuration file to use.")
 	flag.Parse()
 
@@ -22,7 +23,7 @@ func main() {
 	}
 
 	var config stonesthrow.Config
-	err := config.ReadFrom(*configFile, *platform)
+	err := config.ReadServerConfig(*configFile, *platform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -30,18 +31,18 @@ func main() {
 	arguments := flag.Args()
 	if len(arguments) != 0 {
 		switch arguments[0] {
-		case "show_port":
-			fmt.Println(config.GetPort())
+		case "show_config":
+			config.Dump(os.Stdout)
 			os.Exit(1)
 			return
 
 		default:
-			log.Fatalf("Unknown option %s.", arguments[0])
+			log.Fatalf("Unknown argument %s.", arguments[0])
 			return
 		}
 	}
 
-	log.Printf("Starting server for %s on port %d. This is PID %d", config.Platform, config.ServerPort, os.Getpid())
+	log.Printf("Starting server for %s at %s. This is PID %d", config.PlatformName, config.Platform.Address, os.Getpid())
 	server := stonesthrow.Server{}
 	reload := false
 
@@ -59,7 +60,9 @@ func main() {
 		cmd := exec.Command("st_reload",
 			"--pid", fmt.Sprintf("%d", os.Getpid()),
 			"--package", "github.com/asankah/stonesthrow",
-			"st_host", "--platform", config.Platform, "--config", *configFile)
+			"st_host", "--platform", config.PlatformName,
+			"--config", config.ConfigurationFile,
+			"--repository", config.RepositoryName)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

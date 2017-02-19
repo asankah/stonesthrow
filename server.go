@@ -223,7 +223,7 @@ The ID of the job should be specified as the only argument. Any new processes st
 		return ConfigIncompleteError
 	}
 	s.config = config
-	listener, err := net.Listen("tcp", s.config.GetListenAddress())
+	listener, err := net.Listen(config.Platform.Network, config.Platform.Address)
 	if err != nil {
 		return err
 	}
