@@ -1,18 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"path"
 	"github.com/asankah/stonesthrow"
-	"strings"
 )
-
-func prepareBuilderHead(c *stonesthrow.Config) (string, error) {
-}
 
 func main() {
 	defaultServerPlatform := path.Base(os.Args[0])
@@ -60,11 +55,12 @@ func main() {
 		log.Fatal("No arguments")
 	}
 
+	var executor stonesthrow.ConsoleExecutor
 	var req stonesthrow.RequestMessage
 	req.Command = arguments[0]
 	req.Arguments = arguments[1:]
 	req.Repository = *repository
-	req.Revision, err = prepareBuilderHead(&clientConfig)
+	req.Revision, err = clientConfig.Repository.GitCreateBuilderHead(executor)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

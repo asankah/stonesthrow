@@ -85,7 +85,7 @@ func (r *RepositoryConfig) GitCreateWorkTree(e Executor) (string, error) {
 	return r.RunHere(e, "git", "write-tree")
 }
 
-func (r *RepositoryConfig) GitCreateBuilderHead(e Executor) error {
+func (r *RepositoryConfig) GitCreateBuilderHead(e Executor) (string, error) {
 	modifiedFiles, err := r.GitGetModifiedFiles(e)
 	if err != nil {
 		return "", err
@@ -167,7 +167,7 @@ func (r *RepositoryConfig) GitCheckoutRevision(e Executor, targetRevision string
 		return err
 	}
 
-	err = r.CheckHere("git", "checkout", "--force", "--quiet", "--no-progress", "--detach", targetRevision)
+	err = r.CheckHere(e, "git", "checkout", "--force", "--quiet", "--no-progress", "--detach", targetRevision)
 	if err != nil {
 		return err
 	}
@@ -197,7 +197,7 @@ func (r *RepositoryConfig) GitGetModifiedFiles(e Executor) ([]string, error) {
 			continue
 		}
 		if strings.HasPrefix(text, "u ") {
-			return nil, stonesthrow.UnmergedChangesExistError
+			return nil, UnmergedChangesExistError
 		}
 		// Normal changed entry.
 		if strings.HasPrefix(text, "1 ") {

@@ -3,6 +3,7 @@ package stonesthrow
 import (
 	"os/exec"
 	"os"
+	"fmt"
 	"errors"
 	"strings"
 )
@@ -21,7 +22,7 @@ func (c ConsoleExecutor) RunCommand(workdir string, command ...string) (string, 
 
 func (c ConsoleExecutor) CheckCommand(workdir string, command ...string) error {
 	if len(command) == 0 {
-		return "", EmptyCommandError
+		return EmptyCommandError
 	}
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Dir = workdir

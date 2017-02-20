@@ -2,7 +2,6 @@ package stonesthrow
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -123,7 +122,7 @@ func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
 }
 
 func (s *Session) SyncWorkdir(targetHash string) error {
-	err = s.config.Repository.GitCheckoutRevision(targetHash)
+	err := s.config.Repository.GitCheckoutRevision(s, targetHash)
 	if err == DepsChangedError {
 		s.channel.Info("DEPS changed. Running 'sync'")
 		err = s.RunGclientSync()
@@ -166,7 +165,7 @@ func (s *Session) EnsureGomaIfNecessary() error {
 		attemptedToStartGoma := false
 		gomaCommand := []string{path.Join(s.config.Host.GomaPath, "goma_ctl.bat")}
 		for i := 0; i < 5; i += 1 {
-			output, err := s.config.Repository.RunHere(append(gomaCommand, "status")...)
+			output, err := s.config.Repository.RunHere(s, append(gomaCommand, "status")...)
 			if err != nil {
 				return err
 			}
@@ -339,7 +338,7 @@ func (s *Session) GitRebaseUpdate(fetch bool) error {
 	// Ignoring error here since we should be able to run rebase-update with a
 	// detached head. If there's no symolic ref, then we'll skip the final
 	// checkout step.
-	previousHead, _ := s.config.Repository.RunHere("git", "symbolic-ref", "-q", "HEAD")
+	previousHead, _ := s.config.Repository.RunHere(s, "git", "symbolic-ref", "-q", "HEAD")
 
 	if fetch {
 		err = s.updateGitWorkDir(s.config.GetSourcePath("clank"))
