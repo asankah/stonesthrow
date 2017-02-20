@@ -19,6 +19,7 @@ var (
 	UnmergedChangesExistError  = errors.New("working directory has unmerged changes")
 	DepsChangedError           = errors.New("DEPS changed")
 	NoUpstreamError            = errors.New("no upstream configured for this repository")
+	NoRouteToTargetError       = errors.New("no route to target host")
 )
 
 type ConfigError struct {

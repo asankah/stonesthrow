@@ -19,6 +19,7 @@ func main() {
 	configFile := flag.String("config", defaultConfig, "Configuration file")
 	showConfig := flag.Bool("show_config", false, "Display configuration and exit")
 	showColors := flag.Bool("show_colors", false, "Displaye a test color pattern")
+	passthrough := flag.Bool("passthrough", false, "Passthrough mode")
 	flag.Parse()
 
 	if *showColors {
@@ -37,12 +38,23 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
+	if *passthrough {
+		err = stonesthrow.RunPassthroughClient(serverConfig)
+		if err != nil {
+			log.Fatalf("Client failed : %#v", err)
+		}
+		return
+	}
+
 	err = clientConfig.ReadClientConfig(*configFile, *serverPlatform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	if *showConfig {
+		if clientConfig.Host == serverConfig.Host {
+			fmt.Println("Running locally")
+		}
 		fmt.Println("Client configuration:")
 		clientConfig.Dump(os.Stdout)
 		fmt.Println("Server configuration:")
@@ -73,7 +85,7 @@ func main() {
 		}
 	}()
 
-	err = stonesthrow.RunClient(serverConfig, req, output)
+	err = stonesthrow.RunClient(executor, clientConfig, serverConfig, req, output)
 	if err != nil {
 		log.Fatalf("Client failed: %#v", err)
 	}
