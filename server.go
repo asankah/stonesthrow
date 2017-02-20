@@ -203,10 +203,12 @@ func (s *Server) createSession(c net.Conn, quitChannel chan error) {
 	channel := Channel{conn: jsConn}
 
 	blob, err := channel.Receive()
+
 	if err == io.EOF {
 		log.Printf("Done with stream")
 		return
 	}
+
 	if err != nil {
 		log.Printf("Failed Receive: %s", err)
 		return

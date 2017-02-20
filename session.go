@@ -35,11 +35,15 @@ type Session struct {
 	processAdder ProcessAdder
 }
 
-func (s *Session) runCommandAndStreamOutput(command ...string) error {
-	return s.runCommandWithWorkDirAndStreamOutput(s.config.GetSourcePath(), command...)
+func (s *Session) RunCommand(workdir string, command ...string) (string, error) {
+	return RunCommandWithWorkDir(workdir, command...)
 }
 
-func (s *Session) runCommandWithWorkDirAndStreamOutput(workDir string, command ...string) error {
+func (s *Session) CommandAtSourceDir(command ...string) error {
+	return s.CheckCommand(s.config.GetSourcePath(), command...)
+}
+
+func (s *Session) CheckCommand(workDir string, command ...string) error {
 	// Nothing to do
 	if len(command) == 0 {
 		return EmptyCommandError
@@ -85,21 +89,7 @@ func (s *Session) runMB(command ...string) error {
 		arguments = append(arguments, "--goma-dir", s.config.Host.GomaPath)
 	}
 	arguments = append(arguments, command[1:]...)
-	return s.runCommandAndStreamOutput(arguments...)
-}
-
-func RunCommandWithWorkDir(workdir string, command ...string) (string, error) {
-	if len(command) == 0 {
-		return "", EmptyCommandError
-	}
-	cmd := exec.Command(command[0], command[1:]...)
-	cmd.Dir = workdir
-	cmd.Env = nil
-	output, err := cmd.Output()
-	if err != nil {
-		return "", errors.New(fmt.Sprintf("Failed to execute {%s}: %s", command, err.Error()))
-	}
-	return strings.TrimSpace(string(output)), nil
+	return s.CommandAtSourceDir(arguments...)
 }
 
 func ShortTargetNameFromGNLabel(label string) string {
@@ -118,7 +108,7 @@ func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
 	if testOnly {
 		command = append(command, "--testonly=true")
 	}
-	allLabels, err := s.config.Repository.RunHere(command...)
+	allLabels, err := s.config.Repository.RunHere(s, command...)
 	if err != nil {
 		return nil, err
 	}
@@ -133,46 +123,13 @@ func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
 }
 
 func (s *Session) SyncWorkdir(targetHash string) error {
-	// Nothing to do if there is no master.
-	if s.config.Repository.GitRemote == "" {
-		s.channel.Info("Skipping sync on master")
-		return nil
-	}
-
-	currentWorkTree, err := s.config.Repository.GitCreateWorkTree()
-	if err != nil {
-		return err
-	}
-	targetWorkTree, err := s.config.Repository.GitRevision(fmt.Sprintf("%s^{tree}", targetHash))
-	if err == nil && currentWorkTree == targetWorkTree {
-		return nil
-	}
-
-	oldDepsHash, err := s.config.Repository.RunHere("git", "hash-object", "DEPS")
-	if err != nil {
-		return err
-	}
-
-	err = s.runCommandAndStreamOutput("git", "fetch", s.config.Repository.GitRemote, "--progress",
-		"+BUILDER_HEAD:BUILDER_HEAD",
-		"refs/remotes/origin/master:refs/heads/origin")
-	if err != nil {
-		return err
-	}
-
-	err = s.runCommandAndStreamOutput("git", "checkout", "--force", "--quiet",
-		"--no-progress", "--detach", targetHash)
-	if err != nil {
-		return err
-	}
-
-	newDepsHash, err := s.config.Repository.RunHere("git", "hash-object", "DEPS")
-	if err != nil {
-		return err
-	}
-	if oldDepsHash != newDepsHash {
+	err = s.config.Repository.GitCheckoutRevision(targetHash)
+	if err == DepsChangedError {
 		s.channel.Info("DEPS changed. Running 'sync'")
-		return s.RunGclientSync()
+		err = s.RunGclientSync()
+	}
+	if err != nil {
+		return err
 	}
 	return s.PrepareBuild()
 }
@@ -181,7 +138,7 @@ func (s *Session) RunGclientSync() error {
 	if s.config.PlatformName == "mac" {
 		os.Setenv("FORCE_MAC_TOOLCHAIN", "1")
 	}
-	return s.runCommandAndStreamOutput("gclient", "sync")
+	return s.CommandAtSourceDir("gclient", "sync")
 }
 
 func (s *Session) PrepareBuild() error {
@@ -225,7 +182,7 @@ func (s *Session) EnsureGomaIfNecessary() error {
 
 			if !attemptedToStartGoma {
 				attemptedToStartGoma = true
-				s.runCommandAndStreamOutput(append(gomaCommand, "ensure_start")...)
+				s.CommandAtSourceDir(append(gomaCommand, "ensure_start")...)
 			}
 			s.channel.Info("Waiting for compiler proxy ...")
 			time.Sleep(time.Second)
@@ -233,7 +190,7 @@ func (s *Session) EnsureGomaIfNecessary() error {
 		s.channel.Error("Timed out.")
 		return TimedOutError
 	} else {
-		return s.runCommandAndStreamOutput(
+		return s.CommandAtSourceDir(
 			path.Join(s.config.Host.GomaPath, "goma_ctl.py"), "ensure_start")
 	}
 }
@@ -260,7 +217,7 @@ func (s *Session) BuildTargets(targets ...string) error {
 		command = append(command, "-j", fmt.Sprintf("%d", s.config.Host.MaxBuildJobs))
 	}
 	command = append(command, targets...)
-	return s.runCommandAndStreamOutput(command...)
+	return s.CommandAtSourceDir(command...)
 }
 
 func (s *Session) CleanTargets(targets ...string) error {
@@ -277,7 +234,7 @@ func (s *Session) CleanTargets(targets ...string) error {
 
 	command := []string{"ninja", "-C", s.config.GetBuildPath(), "-t", "clean"}
 	command = append(command, targets...)
-	return s.runCommandAndStreamOutput(command...)
+	return s.CommandAtSourceDir(command...)
 }
 
 func (s *Session) Clobber(force bool) error {
@@ -347,22 +304,20 @@ func (s *Session) RunTestTarget(target string, args []string, revision string) e
 		return err
 	}
 	s.setTestRunnerEnvironment()
-	return s.runCommandAndStreamOutput(commandLine...)
+	return s.CommandAtSourceDir(commandLine...)
 }
 
 func (s *Session) GitStatus() error {
-	return s.runCommandAndStreamOutput("git", "status")
+	return s.CommandAtSourceDir("git", "status")
 }
 
 func (s *Session) updateGitWorkDir(workDir string) error {
-	err := s.runCommandWithWorkDirAndStreamOutput(
-		workDir, "git", "checkout", "origin/master")
+	err := s.CheckCommand(workDir, "git", "checkout", "origin/master")
 	if err != nil {
 		return err
 	}
 
-	return s.runCommandWithWorkDirAndStreamOutput(
-		workDir, "git", "pull", "origin", "master")
+	return s.CheckCommand(workDir, "git", "pull", "origin", "master")
 }
 
 func (s *Session) GitRebaseUpdate(fetch bool) error {
@@ -370,7 +325,7 @@ func (s *Session) GitRebaseUpdate(fetch bool) error {
 		return OnlyOnMasterError
 	}
 
-	output, err := s.config.Repository.RunHere("git", "status", "--porcelain",
+	output, err := s.config.Repository.RunHere(s, "git", "status", "--porcelain",
 		"--untracked-files=normal")
 	if err != nil {
 		return err
@@ -403,10 +358,10 @@ func (s *Session) GitRebaseUpdate(fetch bool) error {
 		}
 	}
 
-	err = s.runCommandAndStreamOutput("git", "rebase-update",
+	err = s.CommandAtSourceDir("git", "rebase-update",
 		"--no-fetch", "--keep-going")
 	if previousHead != "" {
-		s.runCommandAndStreamOutput("git", "checkout", previousHead)
+		s.CommandAtSourceDir("git", "checkout", previousHead)
 	}
 
 	return err

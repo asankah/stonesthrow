@@ -17,6 +17,8 @@ var (
 	WorkTreeDirtyError         = errors.New("working directory is dirty")
 	ConfigIncompleteError      = errors.New("configuration incomplete")
 	UnmergedChangesExistError  = errors.New("working directory has unmerged changes")
+	DepsChangedError           = errors.New("DEPS changed")
+	NoUpstreamError            = errors.New("no upstream configured for this repository")
 )
 
 type ConfigError struct {
@@ -27,4 +29,3 @@ type ConfigError struct {
 func (c ConfigError) Error() string {
 	return fmt.Sprintf("Configuration error: %s: %s", c.ConfigFile, c.ErrorString)
 }
-

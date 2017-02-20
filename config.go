@@ -1,8 +1,8 @@
 package stonesthrow
 
 import (
-	"io"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,9 +13,9 @@ type Config struct {
 	PlatformName   string // Platform string.
 	RepositoryName string // Repository.
 
-	Host        *HostConfig       // hostconfig for the remote end hosting |Platform|.
+	Host       *HostConfig       // hostconfig for the remote end hosting |Platform|.
 	Repository *RepositoryConfig // RepositoryConfig for the remote end.
-	Platform    *PlatformConfig   // PlatformConfig for the local end.
+	Platform   *PlatformConfig   // PlatformConfig for the local end.
 
 	ConfigurationFile string      // Configuration file where this Config came from.
 	HostsConfig       HostsConfig // Configuration as read from ConfigurationFile
@@ -53,6 +53,7 @@ func (c *Config) ReadClientConfig(filename, serverPlatform string, repository st
 
 	// Resetting local platform since the local machine is not required to support the target plaform.
 	c.Platform = nil
+	c.PlatformName = ""
 	return nil
 }
 
@@ -124,7 +125,7 @@ func (c *Config) IsValid() bool {
 func (c *Config) Dump(writer io.Writer) {
 	t := template.New("s")
 	_, err := t.Parse(`
-Platform         : {{.PlatformName}}
+{{if .PlatformName}}Platform         : {{.PlatformName}}{{end}}
 Repository       : {{.RepositoryName}}
 ConfigurationFile: {{.ConfigurationFile}}
 
@@ -139,13 +140,14 @@ Repository:{{with .Repository}}
   GitRemote     : {{.GitRemote}}
   MasterHostname: {{.MasterHostname}}
 {{end}}
-Platform:{{with .Platform}}
+{{if .Platform}}Platform:{{with .Platform}}
   Name        : {{.Name}}
   BuildPath   : {{.BuildPath}}
   Network     : {{.Network}}
   Address     : {{.Address}}
   MbConfigName: {{.MbConfigName}}
-{{end}}`)
+{{end}}{{end}}
+`)
 	if err != nil {
 		fmt.Fprint(writer, err.Error())
 		return
