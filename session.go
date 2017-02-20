@@ -23,16 +23,16 @@ type ProcessRecord struct {
 	Process    *os.Process
 	Command    []string
 	StartTime  time.Time
-	Running bool
+	Running    bool
 	EndTime    time.Time
 	SystemTime time.Duration
 	UserTime   time.Duration
 }
 
 type Session struct {
-	config         Config
-	channel        Channel
-	processAdder func([]string, *os.Process) func(*os.ProcessState)
+	config       Config
+	channel      Channel
+	processAdder ProcessAdder
 }
 
 func (s *Session) runCommandAndStreamOutput(command ...string) error {
@@ -63,9 +63,8 @@ func (s *Session) runCommandWithWorkDirAndStreamOutput(workDir string, command .
 	go s.channel.Stream(stdoutPipe)
 	go s.channel.Stream(stderrPipe)
 	cmd.Start()
-	closer := s.processAdder(command, cmd.Process)
+	s.processAdder.AddProcess(command, cmd.Process)
 	cmd.Wait()
-	closer(cmd.ProcessState)
 	s.channel.EndCommand(cmd.ProcessState)
 	if cmd.ProcessState.Success() {
 		return nil

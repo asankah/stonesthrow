@@ -101,11 +101,6 @@ func prepareBuilderHead(c *stonesthrow.Config) (string, error) {
 	}
 }
 
-func responseHandler(message interface{}) error {
-	fmt.Println(message)
-	return nil
-}
-
 func main() {
 	defaultServerPlatform := path.Base(os.Args[0])
 	defaultConfig := stonesthrow.GetDefaultConfigFile()
@@ -162,9 +157,14 @@ func main() {
 	}
 
 	formatter := ConsoleFormatter{config: &serverConfig, porcelain: *porcelain}
-	err = stonesthrow.RunClient(serverConfig, req, func(m interface{}) error {
-		return formatter.Format(m)
-	})
+	output := make(chan interface{})
+	go func() {
+		for message := range output {
+			formatter.Format(message)
+		}
+	}()
+
+	err = stonesthrow.RunClient(serverConfig, req, output)
 	if err != nil {
 		log.Fatalf("Client failed: %#v", err)
 	}

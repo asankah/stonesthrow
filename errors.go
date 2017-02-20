@@ -2,6 +2,7 @@ package stonesthrow
 
 import (
 	"errors"
+	"fmt"
 )
 
 var (
@@ -17,3 +18,13 @@ var (
 	ConfigIncompleteError      = errors.New("configuration incomplete")
 	UnmergedChangesExistError  = errors.New("working directory has unmerged changes")
 )
+
+type ConfigError struct {
+	ConfigFile  string
+	ErrorString string
+}
+
+func (c ConfigError) Error() string {
+	return fmt.Sprintf("Configuration error: %s: %s", c.ConfigFile, c.ErrorString)
+}
+

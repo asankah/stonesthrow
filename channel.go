@@ -45,6 +45,10 @@ func (c Channel) ListCommands(commandList CommandListMessage) {
 	c.conn.Send(commandList)
 }
 
+func (c Channel) ListProcesses(processList ProcessListMessage) {
+	c.conn.Send(processList)
+}
+
 func (c Channel) Receive() (interface{}, error) {
 	r, e := c.conn.Receive()
 	return r, e

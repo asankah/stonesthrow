@@ -46,7 +46,7 @@ type CommandListMessage struct {
 }
 
 type JobRecord struct {
-	Id        int32          `json:"id"`
+	Id        int            `json:"id"`
 	Request   RequestMessage `json:"request"`
 	StartTime time.Time      `json:"start"`
 	Duration  time.Duration  `json:"duration"`

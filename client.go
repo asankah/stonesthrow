@@ -6,9 +6,9 @@ import (
 	"net"
 )
 
-type ResponseHandler func(interface{}) error
+func RunClient(serverConfig Config, request RequestMessage, handler chan interface{}) error {
+	defer close(handler)
 
-func RunClient(serverConfig Config, request RequestMessage, handler ResponseHandler) error {
 	if !serverConfig.IsValid() {
 		return ConfigIncompleteError
 	}
@@ -22,7 +22,6 @@ func RunClient(serverConfig Config, request RequestMessage, handler ResponseHand
 
 	stream := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	jsConn := jsonConnection{stream: stream}
-
 	jsConn.Send(request)
 
 	for {
@@ -34,9 +33,6 @@ func RunClient(serverConfig Config, request RequestMessage, handler ResponseHand
 			return err
 		}
 
-		err = handler(response)
-		if err != nil {
-			return err
-		}
+		handler <- response
 	}
 }

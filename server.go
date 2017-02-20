@@ -2,72 +2,200 @@ package stonesthrow
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
-var jobId int32
+var nextSessionId int
+var nextProcessId int
 
-type Job struct {
-	Id             int32
-	Session        Session
+type SessionInfo struct {
+	Id             int
+	Session        *Session
 	Request        RequestMessage
 	StartTime      time.Time
 	Running        bool
 	CompletionCond *sync.Cond
-	Processes      []ProcessRecord
+	ProcessMap     map[int]*ProcessRecord
+}
+
+type ProcessAdder interface {
+	AddProcess(command []string, process *os.Process)
+}
+
+type SessionTracker struct {
+	Sessions map[int]*SessionInfo
+
+	mut sync.Mutex
+}
+
+type sessionTrackerProcessAdder struct {
+	j           *SessionTracker
+	sessionInfo *SessionInfo
+}
+
+func (j sessionTrackerProcessAdder) AddProcess(command []string, process *os.Process) {
+	j.j.AddProcessToSession(j.sessionInfo, command, process)
+}
+
+// AddSession adds a session to the list of tracked sessions. Calling
+// AddSession is idempotent.
+func (j *SessionTracker) AddSession(s *SessionInfo) {
+	if s.Id != 0 {
+		j.mut.Lock()
+		// thrown runtime error if s was not already added.
+		_ = j.Sessions[s.Id]
+		j.mut.Unlock()
+		return
+	}
+	j.mut.Lock()
+	nextSessionId += 1
+	s.Id = nextSessionId
+	s.CompletionCond = sync.NewCond(&j.mut)
+	j.Sessions[s.Id] = s
+	j.mut.Unlock()
+}
+
+func (j *SessionTracker) RemoveSession(s *SessionInfo) {
+	j.mut.Lock()
+	s.Running = false
+	delete(j.Sessions, s.Id)
+	j.mut.Unlock()
+	s.CompletionCond.Broadcast()
+}
+
+func (j *SessionTracker) SwapConnectionForSession(id int, conn Connection) error {
+	j.mut.Lock()
+	defer j.mut.Unlock()
+	sessionInfo, ok := j.Sessions[id]
+	if !ok {
+		return InvalidArgumentError
+	}
+
+	sessionInfo.Session.channel.SwapConnection(conn)
+	if sessionInfo.Running {
+		sessionInfo.CompletionCond.Wait()
+	}
+	return nil
+}
+
+func (j *SessionTracker) GetSession(id int) *SessionInfo {
+	j.mut.Lock()
+	s, _ := j.Sessions[id]
+	j.mut.Unlock()
+	return s 
+}
+
+func (j *SessionTracker) GetSessionProcessAdder(s *SessionInfo) ProcessAdder {
+	j.AddSession(s)
+	return sessionTrackerProcessAdder{j: j, sessionInfo: s}
+}
+
+func (j *SessionTracker) AddProcessToSession(s *SessionInfo, command []string, process *os.Process) int {
+	j.mut.Lock()
+	thisProcessId := nextProcessId
+	nextProcessId += 1
+	sessionInfo := j.Sessions[s.Id]
+	if sessionInfo.ProcessMap == nil {
+		sessionInfo.ProcessMap = make(map[int]*ProcessRecord)
+	}
+	sessionInfo.ProcessMap[thisProcessId] = &ProcessRecord{
+		Process:   process,
+		Command:   command,
+		StartTime: time.Now(),
+		Running:   true}
+	j.mut.Unlock()
+	go func() {
+		state, _ := process.Wait()
+		j.RemoveProcessFromSession(s, thisProcessId, state)
+	}()
+	return thisProcessId
+}
+
+func (j *SessionTracker) RemoveProcessFromSession(s *SessionInfo, processId int, state *os.ProcessState) {
+	j.mut.Lock()
+	defer j.mut.Unlock()
+	sessionInfo, ok := j.Sessions[s.Id]
+	if !ok {
+		return
+	}
+	processRecord, ok := sessionInfo.ProcessMap[processId]
+	if !ok {
+		return
+	}
+	processRecord.Running = false
+	processRecord.EndTime = time.Now()
+	if state != nil {
+		processRecord.SystemTime = state.SystemTime()
+		processRecord.UserTime = state.UserTime()
+	}
+}
+
+func (j *SessionTracker) GetJobList() JobListMessage {
+	var sessionList JobListMessage
+	j.mut.Lock()
+	defer j.mut.Unlock()
+
+	now := time.Now()
+	for _, sessionInfo := range j.Sessions {
+		jobRecord := JobRecord{
+			Id:        sessionInfo.Id,
+			Request:   sessionInfo.Request,
+			StartTime: sessionInfo.StartTime,
+			Duration:  now.Sub(sessionInfo.StartTime)}
+		for _, proc := range sessionInfo.ProcessMap {
+			endTime := now
+			if !proc.Running {
+				endTime = proc.EndTime
+			}
+			jobRecord.Processes = append(jobRecord.Processes, Process{
+				Command:    proc.Command,
+				StartTime:  proc.StartTime,
+				Duration:   endTime.Sub(proc.StartTime),
+				Running:    proc.Running,
+				EndTime:    proc.EndTime,
+				SystemTime: proc.SystemTime,
+				UserTime:   proc.UserTime})
+		}
+		sessionList.Jobs = append(sessionList.Jobs, jobRecord)
+	}
+	return sessionList
+}
+
+func (j *SessionTracker) KillRunningProcesses() ProcessListMessage {
+	var processList ProcessListMessage
+
+	j.mut.Lock()
+	defer j.mut.Unlock()
+
+	for _, sessionInfo := range j.Sessions {
+		for _, proc := range sessionInfo.ProcessMap {
+			if !proc.Running {
+				continue
+			}
+
+			proc.Process.Kill()
+			processList.Processes = append(processList.Processes, Process{
+				Command: proc.Command,
+				StartTime: proc.StartTime,
+				Running: proc.Running})
+		}
+	}
+	return processList
 }
 
 type Server struct {
 	config     Config
 	quitSignal chan error
-
-	activeJobsMutex sync.Mutex
-	activeJobs      map[int32]Job
-	nextProcessId   int32
-	activeProcesses map[int32]*ProcessRecord
+	jobTracker SessionTracker
 }
 
-func (s *Server) AddProcess(jobId int32, command []string, process *os.Process) func(*os.ProcessState) {
-	s.activeJobsMutex.Lock()
-	thisProcessId := s.nextProcessId
-	s.nextProcessId += 1
-	if s.activeProcesses == nil {
-		s.activeProcesses = make(map[int32]*ProcessRecord)
-	}
-	job := s.activeJobs[jobId]
-	if job.Processes == nil {
-		job.Processes = []ProcessRecord{}
-	}
-	job.Processes = append(job.Processes, ProcessRecord{
-		Process:   process,
-		Command:   command,
-		StartTime: time.Now(),
-		Running:   true})
-	processRecord := &job.Processes[len(job.Processes)-1]
-	s.activeProcesses[thisProcessId] = processRecord
-	s.activeJobs[jobId] = job
-	s.activeJobsMutex.Unlock()
-
-	return func(state *os.ProcessState) {
-		s.activeJobsMutex.Lock()
-		processRecord.Running = false
-		processRecord.EndTime = time.Now()
-		processRecord.SystemTime = state.SystemTime()
-		processRecord.UserTime = state.UserTime()
-		delete(s.activeProcesses, thisProcessId)
-		s.activeJobsMutex.Unlock()
-	}
-}
-
-func (s *Server) startSession(c net.Conn, quitChannel chan error) {
+func (s *Server) createSession(c net.Conn, quitChannel chan error) {
 	defer c.Close()
 
 	readerWriter := bufio.NewReadWriter(bufio.NewReader(c), bufio.NewWriter(c))
@@ -97,51 +225,32 @@ func (s *Server) startSession(c net.Conn, quitChannel chan error) {
 	}
 
 	if req.Command == "join" && len(req.Arguments) == 1 {
-		jobId, err := strconv.Atoi(req.Arguments[0])
+		sessionId, err := strconv.Atoi(req.Arguments[0])
 		if err != nil {
 			channel.Error(err.Error())
 			return
 		}
-		s.activeJobsMutex.Lock()
-		job, ok := s.activeJobs[int32(jobId)]
-		if ok {
-			job.Session.channel.SwapConnection(jsConn)
+		err = s.jobTracker.SwapConnectionForSession(sessionId, jsConn)
+		if err != nil {
+			channel.Error(err.Error())
 		}
-		for ok && job.Running {
-			job.CompletionCond.Wait()
-			job, ok = s.activeJobs[int32(jobId)]
-		}
-		s.activeJobsMutex.Unlock()
+		return
 	}
 
-	myJobId := atomic.AddInt32(&jobId, 1)
-
-	session := Session{config: s.config, channel: channel,
-		processAdder: func(c []string, p *os.Process) func(*os.ProcessState) {
-			return s.AddProcess(myJobId, c, p)
-		}}
-
-	myJob := Job{
-		Id:             myJobId,
-		Session:        session,
+	sessionInfo := SessionInfo{
 		Request:        *req,
 		StartTime:      time.Now(),
-		Running:        true,
-		CompletionCond: sync.NewCond(&s.activeJobsMutex)}
+		Running:        true}
 
+	s.jobTracker.AddSession(&sessionInfo)
 
-	s.activeJobsMutex.Lock()
-	s.activeJobs[myJob.Id] = myJob
-	s.activeJobsMutex.Unlock()
+	sessionInfo.Session = &Session{config: s.config, channel: channel,
+		processAdder: s.jobTracker.GetSessionProcessAdder(&sessionInfo)}
+
 	log.Printf("Dispatching request %s", req.Command)
+	DispatchRequest(sessionInfo.Session, *req)
 
-	DispatchRequest(&session, *req)
-
-	s.activeJobsMutex.Lock()
-	myJob.Running = false
-	myJob.CompletionCond.Broadcast()
-	delete(s.activeJobs, myJob.Id)
-	s.activeJobsMutex.Unlock()
+	s.jobTracker.RemoveSession(&sessionInfo)
 	return
 }
 
@@ -150,63 +259,15 @@ func (s *Server) Quit() {
 }
 
 func (s *Server) listJobsHandler(session *Session, req RequestMessage) {
-	var jobList JobListMessage
-	jobList.Jobs = []JobRecord{}
-	now := time.Now()
-	s.activeJobsMutex.Lock()
-	for _, job := range s.activeJobs {
-		jobRecord := JobRecord{
-			Id:        job.Id,
-			Request:   job.Request,
-			StartTime: job.StartTime,
-			Duration:  now.Sub(job.StartTime)}
-		jobRecord.Processes = []Process{}
-		for _, proc := range job.Processes {
-			endTime := now
-			if !proc.Running {
-				endTime = proc.EndTime
-			}
-			jobRecord.Processes = append(jobRecord.Processes, Process{
-				Command: proc.Command,
-				StartTime: proc.StartTime,
-				Duration: endTime.Sub(proc.StartTime),
-				Running: proc.Running,
-				EndTime: proc.EndTime,
-				SystemTime: proc.SystemTime,
-				UserTime: proc.UserTime})
-		}
-		jobList.Jobs = append(jobList.Jobs, jobRecord)
-	}
-	s.activeJobsMutex.Unlock()
-	session.channel.ListJobs(jobList)
-}
-
-func (s *Server) getActiveProcessList() []ProcessRecord {
-	processList := []ProcessRecord{}
-	s.activeJobsMutex.Lock()
-	for _, p := range s.activeProcesses {
-		processList = append(processList, *p)
-	}
-	s.activeJobsMutex.Unlock()
-	return processList
+	session.channel.ListJobs(s.jobTracker.GetJobList())
 }
 
 func (s *Server) killProcessHandler(session *Session, req RequestMessage) {
-	processList := s.getActiveProcessList()
-	if len(processList) == 0 {
-		session.channel.Info("No active processes")
-		return
-	}
-
-	for _, proc := range processList {
-		session.channel.Info(fmt.Sprintf("Killing process: %s", proc.Command))
-		proc.Process.Kill()
-	}
+	session.channel.ListProcesses(s.jobTracker.KillRunningProcesses())
 }
 
 func (s *Server) Run(config Config) error {
-	jobId = 1
-	s.activeJobs = make(map[int32]Job)
+	nextSessionId = 1
 	AddHandler("jobs", "List running jobs", func(sess *Session, req RequestMessage) error {
 		s.listJobsHandler(sess, req)
 		return nil
@@ -249,7 +310,7 @@ The ID of the job should be specified as the only argument. Any new processes st
 		select {
 		case conn = <-connections:
 			conn := conn
-			go s.startSession(conn, s.quitSignal)
+			go s.createSession(conn, s.quitSignal)
 
 		case err = <-s.quitSignal:
 			return err
