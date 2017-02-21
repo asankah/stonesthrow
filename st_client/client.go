@@ -73,7 +73,7 @@ func main() {
 		log.Fatal("No arguments")
 	}
 
-	var executor stonesthrow.ConsoleExecutor
+	executor := stonesthrow.ConsoleExecutor{HideStdout: true}
 	var req stonesthrow.RequestMessage
 	req.Command = arguments[0]
 	req.Arguments = arguments[1:]

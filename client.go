@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 func runClientWithStream(request RequestMessage, handler chan interface{}, reader io.Reader,
@@ -73,8 +74,9 @@ func runSshClient(e Executor, sshTarget SshTarget, clientConfig Config, serverCo
 	if sshTarget.SshHostName == "" {
 		sshTarget.SshHostName = sshTarget.HostName
 	}
-	sshCommand := []string{sshTarget.SshHostName, "-T", "st_client",
-		"--platform", serverConfig.PlatformName,
+	sshCommand := []string{sshTarget.SshHostName, "-T",
+		filepath.Join(serverConfig.Host.StonesthrowPath, "st_client"),
+		"--server", serverConfig.PlatformName,
 		"--repository", serverConfig.RepositoryName,
 		"--passthrough"}
 	cmd := exec.Command("ssh", sshCommand...)
@@ -101,12 +103,12 @@ func RunClient(e Executor, clientConfig Config, serverConfig Config, request Req
 		return ConfigIncompleteError
 	}
 
-	if clientConfig.Host.Name == serverConfig.Host.Name {
+	if clientConfig.Host == serverConfig.Host {
 		return runLocalClient(serverConfig, request, handler)
 	}
 
 	for _, sshTarget := range clientConfig.Host.SshTargets {
-		if sshTarget.Host.Name == serverConfig.Host.Name {
+		if sshTarget.Host == serverConfig.Host {
 			return runSshClient(e, sshTarget, clientConfig, serverConfig,
 				request, handler)
 		}

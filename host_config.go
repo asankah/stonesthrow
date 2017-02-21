@@ -12,11 +12,12 @@ type SshTarget struct {
 }
 
 type HostConfig struct {
-	Alias        []string                     `json:"alias,omitempty"`
-	Repositories map[string]*RepositoryConfig `json:"repositories,omitempty"`
-	GomaPath     string                       `json:"goma_path,omitempty"`
-	MaxBuildJobs int                          `json:"max_build_jobs,omitempty"`
-	SshTargets   []SshTarget                  `json:"ssh_targets"`
+	Alias           []string                     `json:"alias,omitempty"`
+	Repositories    map[string]*RepositoryConfig `json:"repositories,omitempty"`
+	GomaPath        string                       `json:"goma_path,omitempty"`
+	StonesthrowPath string                       `json:"stonesthrow,omitempty"`
+	MaxBuildJobs    int                          `json:"max_build_jobs,omitempty"`
+	SshTargets      []SshTarget                  `json:"ssh_targets"`
 
 	Name              string            `json:"-"`
 	DefaultRepository *RepositoryConfig `json:"-"`

@@ -136,6 +136,7 @@ Repository       : {{.RepositoryName}}
 Host :{{with .Host}}
   Name        : {{.Name}}
   GomaPath    : {{.GomaPath}}
+  Stonesthrow : {{.StonesthrowPath}}
   MaxBuildJobs: {{.MaxBuildJobs}}
 {{if .DefaultRepository}}  Default Repo: {{.DefaultRepository.Name}}{{end}}
 {{if .SshTargets}} SSH Targets:{{range .SshTargets}}

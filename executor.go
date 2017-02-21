@@ -1,10 +1,10 @@
 package stonesthrow
 
 import (
-	"os/exec"
-	"os"
-	"fmt"
 	"errors"
+	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 )
 
@@ -14,6 +14,7 @@ type Executor interface {
 }
 
 type ConsoleExecutor struct {
+	HideStdout bool
 }
 
 func (c ConsoleExecutor) RunCommand(workdir string, command ...string) (string, error) {
@@ -27,8 +28,10 @@ func (c ConsoleExecutor) CheckCommand(workdir string, command ...string) error {
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Dir = workdir
 	cmd.Env = nil
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
+	cmd.Stdin = nil
+	if !c.HideStdout {
+		cmd.Stdout = os.Stdout
+	}
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
@@ -46,4 +49,3 @@ func RunCommandWithWorkDir(workdir string, command ...string) (string, error) {
 	}
 	return strings.TrimSpace(string(output)), nil
 }
-
