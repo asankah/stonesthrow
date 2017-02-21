@@ -1,14 +1,15 @@
 package stonesthrow
 
 import (
-	"os"
 	"bufio"
-	"os/exec"
 	"io"
 	"net"
+	"os"
+	"os/exec"
 )
 
-func runClientWithStream(request RequestMessage, handler chan interface{}, reader io.Reader, writer io.Writer) error {
+func runClientWithStream(request RequestMessage, handler chan interface{}, reader io.Reader,
+	writer io.Writer) error {
 
 	stream := bufio.NewReadWriter(bufio.NewReader(reader), bufio.NewWriter(writer))
 	jsconn := jsonConnection{stream: stream}
@@ -57,11 +58,12 @@ func RunPassthroughClient(serverConfig Config) error {
 		quit <- 0
 	}()
 
-	<- quit
+	<-quit
 	return nil
 }
 
-func runSshClient(e Executor, sshTarget SshTarget, clientConfig Config, serverConfig Config, request RequestMessage, handler chan interface{}) error {
+func runSshClient(e Executor, sshTarget SshTarget, clientConfig Config, serverConfig Config,
+	request RequestMessage, handler chan interface{}) error {
 
 	err := clientConfig.Repository.GitPushRemote(e)
 	if err != nil {
@@ -91,20 +93,22 @@ func runSshClient(e Executor, sshTarget SshTarget, clientConfig Config, serverCo
 	return runClientWithStream(request, handler, readEnd, writeEnd)
 }
 
-func RunClient(e Executor, clientConfig Config, serverConfig Config, request RequestMessage, handler chan interface{}) error {
+func RunClient(e Executor, clientConfig Config, serverConfig Config, request RequestMessage,
+	handler chan interface{}) error {
 	defer close(handler)
 
 	if !clientConfig.IsValid() || !serverConfig.IsValid() {
 		return ConfigIncompleteError
 	}
 
-	if clientConfig.Host == serverConfig.Host {
+	if clientConfig.Host.Name == serverConfig.Host.Name {
 		return runLocalClient(serverConfig, request, handler)
 	}
 
 	for _, sshTarget := range clientConfig.Host.SshTargets {
-		if sshTarget.Host == serverConfig.Host {
-			return runSshClient(e, sshTarget, clientConfig, serverConfig, request, handler)
+		if sshTarget.Host.Name == serverConfig.Host.Name {
+			return runSshClient(e, sshTarget, clientConfig, serverConfig,
+				request, handler)
 		}
 	}
 	return NoRouteToTargetError

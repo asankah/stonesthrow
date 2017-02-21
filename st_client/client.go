@@ -3,10 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/asankah/stonesthrow"
 	"log"
 	"os"
 	"path"
-	"github.com/asankah/stonesthrow"
 )
 
 func main() {
@@ -16,7 +16,7 @@ func main() {
 	serverPlatform := flag.String("server", defaultServerPlatform, "Server platform.")
 	repository := flag.String("repository", "", "Repository")
 	porcelain := flag.Bool("porcelain", false, "Porcelain.")
-	configFile := flag.String("config", defaultConfig, "Configuration file")
+	configFileName := flag.String("config", defaultConfig, "Configuration file")
 	showConfig := flag.Bool("show_config", false, "Display configuration and exit")
 	showColors := flag.Bool("show_colors", false, "Displaye a test color pattern")
 	passthrough := flag.Bool("passthrough", false, "Passthrough mode")
@@ -32,8 +32,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	var configFile stonesthrow.ConfigurationFile
 	var clientConfig, serverConfig stonesthrow.Config
-	err := serverConfig.ReadServerConfig(*configFile, *serverPlatform, *repository)
+	err := configFile.ReadFrom(*configFileName)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	err = serverConfig.SelectServerConfig(&configFile, *serverPlatform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -46,7 +52,7 @@ func main() {
 		return
 	}
 
-	err = clientConfig.ReadClientConfig(*configFile, *serverPlatform, *repository)
+	err = clientConfig.SelectClientConfig(&configFile, *serverPlatform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

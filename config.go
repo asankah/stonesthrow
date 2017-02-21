@@ -9,6 +9,16 @@ import (
 	"text/template"
 )
 
+type ConfigurationFile struct {
+	FileName    string      // Configuration file where this Config came from.
+	HostsConfig HostsConfig // Configuration as read from ConfigurationFile
+}
+
+func (c *ConfigurationFile) ReadFrom(filename string) error {
+	c.FileName = filename
+	return c.HostsConfig.ReadFrom(filename)
+}
+
 type Config struct {
 	PlatformName   string // Platform string.
 	RepositoryName string // Repository.
@@ -17,20 +27,19 @@ type Config struct {
 	Repository *RepositoryConfig // RepositoryConfig for the remote end.
 	Platform   *PlatformConfig   // PlatformConfig for the local end.
 
-	ConfigurationFile string      // Configuration file where this Config came from.
-	HostsConfig       HostsConfig // Configuration as read from ConfigurationFile
+	ConfigurationFile *ConfigurationFile // Source
 }
 
 func (c *Config) newError(s string, v ...interface{}) error {
-	configFile := c.ConfigurationFile
+	configFile := c.ConfigurationFile.FileName
 	if configFile == "" {
 		configFile = "<unknown configuration file>"
 	}
 	return ConfigError{ConfigFile: configFile, ErrorString: fmt.Sprintf(s, v...)}
 }
 
-func (c *Config) ReadClientConfig(filename, serverPlatform string, repository string) error {
-	err := c.ReadServerConfig(filename, serverPlatform, repository)
+func (c *Config) SelectClientConfig(configFile *ConfigurationFile, serverPlatform string, repository string) error {
+	err := c.SelectServerConfig(configFile, serverPlatform, repository)
 	if err != nil {
 		return err
 	}
@@ -41,7 +50,7 @@ func (c *Config) ReadClientConfig(filename, serverPlatform string, repository st
 	}
 
 	var ok bool
-	c.Host, ok = c.HostsConfig.Hosts[hostname]
+	c.Host, ok = configFile.HostsConfig.Hosts[hostname]
 	if !ok {
 		return c.newError("Can't determine local host config for %s", hostname)
 	}
@@ -61,16 +70,12 @@ func (c *Config) ReadClientConfig(filename, serverPlatform string, repository st
 // receiver with the values corresponding to |platform| and |repository|.  It
 // returns an error if something went wrong, in which case the state of the
 // receiver is unknown.
-func (c *Config) ReadServerConfig(filename, platform string, repository string) error {
-	c.ConfigurationFile = filename
-	err := c.HostsConfig.ReadFrom(filename)
-	if err != nil {
-		return err
-	}
+func (c *Config) SelectServerConfig(configFile *ConfigurationFile, platform string, repository string) error {
+	c.ConfigurationFile = configFile
 
 	c.PlatformName = platform
 	var ok bool
-	c.Host, ok = c.HostsConfig.PlatformHostMap[platform]
+	c.Host, ok = configFile.HostsConfig.PlatformHostMap[platform]
 	if !ok {
 		return fmt.Errorf("%s is not a valid platform", c.PlatformName)
 	}
@@ -114,8 +119,7 @@ func (c *Config) GetBuildPath(p ...string) string {
 }
 
 func (c *Config) IsValid() bool {
-	return c.ConfigurationFile != "" &&
-		c.PlatformName != "" &&
+	return c.ConfigurationFile != nil &&
 		c.RepositoryName != "" &&
 		c.Repository != nil &&
 		c.Host != nil
@@ -127,13 +131,18 @@ func (c *Config) Dump(writer io.Writer) {
 	_, err := t.Parse(`
 {{if .PlatformName}}Platform         : {{.PlatformName}}{{end}}
 Repository       : {{.RepositoryName}}
-ConfigurationFile: {{.ConfigurationFile}}
+{{if .ConfigurationFile}}ConfigurationFile: {{.ConfigurationFile.FileName}}{{end}}
 
 Host :{{with .Host}}
   Name        : {{.Name}}
   GomaPath    : {{.GomaPath}}
   MaxBuildJobs: {{.MaxBuildJobs}}
+{{if .DefaultRepository}}  Default Repo: {{.DefaultRepository.Name}}{{end}}
+{{if .SshTargets}} SSH Targets:{{range .SshTargets}}
+    Hostname  : {{.HostName}}{{if .Host}} [Resolved]{{end}}
+    SSH Host  : {{.SshHostName}}
 {{end}}
+{{end}}{{end}}
 Repository:{{with .Repository}}
   Name          : {{.Name}}
   SourcePath    : {{.SourcePath}}

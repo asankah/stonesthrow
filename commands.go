@@ -79,7 +79,7 @@ func handleHelp(s *Session, req RequestMessage) error {
 	chromeRepo.SourcePath = s.config.GetSourcePath()
 	chromeRepo.Revistion, _ = s.config.Repository.GitRevision(s, "HEAD")
 	commandList.Synposis = "Remote build runner"
-	commandList.ConfigFile = s.config.ConfigurationFile
+	commandList.ConfigFile = s.config.ConfigurationFile.FileName
 	commandList.Repositories["chrome"] = chromeRepo
 
 	commandList.Commands = make(map[string]Command)

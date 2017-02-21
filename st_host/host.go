@@ -12,18 +12,24 @@ import (
 func main() {
 	platform := flag.String("platform", "", "Platform to use. See code for valid platform values.")
 	repository := flag.String("repository", "", "Repository to use.")
-	configFile := flag.String("config", stonesthrow.GetDefaultConfigFile(), "Configuration file to use.")
+	configFileName := flag.String("config", stonesthrow.GetDefaultConfigFile(), "Configuration file to use.")
 	flag.Parse()
 
 	if *platform == "" {
 		log.Fatal("Need to specify the platform")
 	}
-	if *configFile == "" {
+	if *configFileName == "" {
 		log.Fatal("Need a configuration file")
 	}
 
+	var configFile stonesthrow.ConfigurationFile
+	err := configFile.ReadFrom(*configFileName)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
 	var config stonesthrow.Config
-	err := config.ReadServerConfig(*configFile, *platform, *repository)
+	err = config.SelectServerConfig(&configFile, *platform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -61,7 +67,7 @@ func main() {
 			"--pid", fmt.Sprintf("%d", os.Getpid()),
 			"--package", "github.com/asankah/stonesthrow",
 			"st_host", "--platform", config.PlatformName,
-			"--config", config.ConfigurationFile,
+			"--config", config.ConfigurationFile.FileName,
 			"--repository", config.RepositoryName)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
