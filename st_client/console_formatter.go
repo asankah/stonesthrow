@@ -103,7 +103,7 @@ func (f *ConsoleFormatter) AddNinjaFilters() {
 		`(.*):(\d+):(\d+): (\S+): (.*)$`,
 		CLocation("$1")+":"+CLocation("$2")+":"+CLocation("$3")+": "+CError("$4")+": $5")
 	f.AddRegExpReplace(
-		` (CC|CXX) `,
+		` (CC|CXX|OBJCXX) `,
 		CSourceBuildStep(" $1 "))
 	f.AddRegExpReplace(
 		` (STAMP|ACTION|AR|LINK|SOLINK|RC|LIB) `,
