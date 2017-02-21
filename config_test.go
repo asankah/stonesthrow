@@ -6,14 +6,21 @@ import (
 )
 
 func TestConfig_ReadFrom(t *testing.T) {
+	var cf ConfigurationFile
 	var c Config
 	path := filepath.Join("testdata", "config-basic.json")
-	err := c.ReadServerConfig(path, "linux", "")
+
+	err := cf.ReadFrom(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if c.ConfigurationFile != path {
+	err = c.SelectServerConfig(&cf, "linux", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if c.ConfigurationFile != &cf {
 		t.Fatal("ConfigurationFile")
 	}
 
@@ -21,7 +28,7 @@ func TestConfig_ReadFrom(t *testing.T) {
 		t.Fatal("Platform")
 	}
 
-	err = c.ReadServerConfig(path, "chromeos", "")
+	err = c.SelectServerConfig(&cf, "chromeos", "")
 	if err == nil {
 		t.Fatal("Should've failed to load non-existent platform")
 	}

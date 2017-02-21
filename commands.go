@@ -123,16 +123,9 @@ func handleList(s *Session, req RequestMessage) error {
 	return nil
 }
 
-func addDynamicHandlers(s *Session, handlerMap map[string]Handler) {
-	allTestTargets, err := s.GetAllTargets(true)
-	if err != nil {
-		return
-	}
-	for target, _ := range allTestTargets {
-		AddTestHandler(target, func(s *Session, req RequestMessage) error {
-			return s.RunTestTarget(target, req.Arguments, req.Revision)
-		})
-	}
+func addDynamicHandlers(s *Session) {
+	AddHandler("help", "Does what you think it does.", handleHelp)
+	AddHandler("list", "Lists targets that are valid for 'build' and 'test'.", handleList)
 
 	if s.config.Repository.GitRemote == "" {
 		AddHandler("ru", `Run 'git rebase-update'.`,
@@ -150,12 +143,19 @@ func addDynamicHandlers(s *Session, handlerMap map[string]Handler) {
 			})
 	}
 
-	AddHandler("help", "Does what you think it does.", handleHelp)
-	AddHandler("list", "Lists targets that are valid for 'build' and 'test'.", handleList)
+	allTestTargets, err := s.GetAllTargets(true)
+	if err != nil {
+		return
+	}
+	for target, _ := range allTestTargets {
+		AddTestHandler(target, func(s *Session, req RequestMessage) error {
+			return s.RunTestTarget(target, req.Arguments, req.Revision)
+		})
+	}
 }
 
 func DispatchRequest(s *Session, req RequestMessage) {
-	initOnce.Do(func() { addDynamicHandlers(s, handlerMap) })
+	initOnce.Do(func() { addDynamicHandlers(s) })
 
 	handler, ok := handlerMap[req.Command]
 	if !ok {

@@ -73,7 +73,7 @@ func main() {
 		log.Fatal("No arguments")
 	}
 
-	executor := stonesthrow.ConsoleExecutor{HideStdout: true}
+	executor := stonesthrow.ConsoleExecutor{HideStdout: false}
 	var req stonesthrow.RequestMessage
 	req.Command = arguments[0]
 	req.Arguments = arguments[1:]
@@ -84,15 +84,18 @@ func main() {
 	}
 
 	formatter := ConsoleFormatter{config: &serverConfig, porcelain: *porcelain}
+	done := make(chan int)
 	output := make(chan interface{})
 	go func() {
 		for message := range output {
 			formatter.Format(message)
 		}
+		done <- 0
 	}()
 
 	err = stonesthrow.RunClient(executor, clientConfig, serverConfig, req, output)
 	if err != nil {
 		log.Fatalf("Client failed: %#v", err)
 	}
+	<- done
 }

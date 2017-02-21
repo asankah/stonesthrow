@@ -9,29 +9,18 @@ import (
 // HostConfig is the on-disk format for configuring Stonesthrow.
 type HostsConfig struct {
 	Hosts map[string]*HostConfig `json:"hosts"`
-
-	// Maps from a platform to a HostConfig. Each platform is restricted to
-	// a single host, but can support multiple repositories.
-	PlatformHostMap map[string]*HostConfig `json:"-"`
 }
 
-func (h *HostsConfig) Normalize() {
-	if h.PlatformHostMap == nil {
-		h.PlatformHostMap = make(map[string]*HostConfig)
-	}
-
+func (h *HostsConfig) Normalize() error {
 	for hostName, hostConfig := range h.Hosts {
 		if hostConfig.Name == "" {
-			hostConfig.Normalize(hostName)
+			err := hostConfig.Normalize(hostName)
+			if err != nil {
+				return err
+			}
 		}
 		for _, alias := range hostConfig.Alias {
 			h.Hosts[alias] = hostConfig
-		}
-
-		for _, repo := range hostConfig.Repositories {
-			for platform := range repo.Platforms {
-				h.PlatformHostMap[platform] = hostConfig
-			}
 		}
 	}
 
@@ -42,14 +31,26 @@ func (h *HostsConfig) Normalize() {
 		for index, remote := range hostConfig.SshTargets {
 			hostConfig.SshTargets[index].Host, _ = h.Hosts[remote.HostName]
 		}
+
+		for _, repo := range hostConfig.Repositories {
+			for _, platform := range repo.Platforms {
+				for hostName, ep := range platform.Endpoints {
+					var ok bool
+					ep.Host, ok = h.Hosts[ep.HostName]
+					if !ok {
+						return fmt.Errorf("%s -> %s -> %s: Endpoint host %s can't be resolved",
+							hostConfig.Name, repo.Name, platform.Name, ep.HostName)
+					}
+					platform.Endpoints[hostName] = ep
+				}
+			}
+		}
 	}
+
+	return h.Validate()
 }
 
 func (h *HostsConfig) Validate() error {
-	if h.PlatformHostMap == nil {
-		return fmt.Errorf("HostsConfig not normalized")
-	}
-
 	for _, host := range h.Hosts {
 		err := host.Validate()
 		if err != nil {
@@ -74,6 +75,20 @@ func (h *HostsConfig) ReadFrom(filename string) error {
 		return fmt.Errorf("No configuration entries found in %s.", filename)
 	}
 
-	h.Normalize()
-	return h.Validate()
+	return h.Normalize()
+}
+
+func (h *HostsConfig) HostForPlatform(platform string, localhost string) *HostConfig {
+	config, ok := h.Hosts[localhost]
+	if ok && config.SupportsPlatform(platform) {
+			return config
+	}
+
+	for _, config = range h.Hosts {
+		if config.SupportsPlatform(platform) {
+			return config
+		}
+	}
+
+	return nil
 }

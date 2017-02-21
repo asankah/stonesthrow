@@ -29,8 +29,8 @@ func runClientWithStream(request RequestMessage, handler chan interface{}, reade
 	}
 }
 
-func runLocalClient(serverConfig Config, request RequestMessage, handler chan interface{}) error {
-	conn, err := net.Dial(serverConfig.Platform.Network, serverConfig.Platform.Address)
+func runWithLocalEndpoint(serverConfig Config, endpoint Endpoint, request RequestMessage, handler chan interface{}) error {
+	conn, err := net.Dial(endpoint.Network, endpoint.Address)
 	if err != nil {
 		return err
 	}
@@ -40,8 +40,64 @@ func runLocalClient(serverConfig Config, request RequestMessage, handler chan in
 	return runClientWithStream(request, handler, conn, conn)
 }
 
+type localStaticConnection struct {
+	ResponseSink chan interface{}
+}
+
+func (l localStaticConnection) Receive() (interface{}, error) {
+	return nil, io.EOF
+}
+
+func (l localStaticConnection) Send(message interface{}) error {
+	switch t := message.(type) {
+	case TerminalOutputMessage:
+		l.ResponseSink <- &t
+
+	case InfoMessage:
+		l.ResponseSink <- &t
+
+	case ErrorMessage:
+		l.ResponseSink <- &t
+
+	case BeginCommandMessage:
+		l.ResponseSink <- &t
+
+	case EndCommandMessage:
+		l.ResponseSink <- &t
+
+	case CommandListMessage:
+		l.ResponseSink <- &t
+
+	case JobListMessage:
+		l.ResponseSink <- &t
+
+	case RequestMessage:
+		l.ResponseSink <- &t
+	}
+	return nil
+}
+
+func runLocallyWithoutServer(serverConfig Config, request RequestMessage, handler chan interface{}) error {
+	connection := localStaticConnection{ResponseSink: handler}
+	channel := Channel{conn: connection}
+	session := Session{config: serverConfig, channel: channel, processAdder: nil}
+	DispatchRequest(&session, request)
+	return nil
+}
+
 func RunPassthroughClient(serverConfig Config) error {
-	conn, err := net.Dial(serverConfig.Platform.Network, serverConfig.Platform.Address)
+	var endpoint Endpoint
+	for _, endpoint = range serverConfig.Platform.Endpoints {
+		if endpoint.Host == serverConfig.Host {
+			break
+		}
+	}
+
+	if endpoint.Host != serverConfig.Host {
+		return InvalidPlatformError
+	}
+
+	conn, err := net.Dial(endpoint.Network, endpoint.Address)
 	if err != nil {
 		return err
 	}
@@ -63,9 +119,10 @@ func RunPassthroughClient(serverConfig Config) error {
 	return nil
 }
 
-func runSshClient(e Executor, sshTarget SshTarget, clientConfig Config, serverConfig Config,
+func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, serverConfig Config,
 	request RequestMessage, handler chan interface{}) error {
 
+	// Passthrough requires that the server already have the correct BUILDER_HEAD.
 	err := clientConfig.Repository.GitPushRemote(e)
 	if err != nil {
 		return err
@@ -104,14 +161,21 @@ func RunClient(e Executor, clientConfig Config, serverConfig Config, request Req
 	}
 
 	if clientConfig.Host == serverConfig.Host {
-		return runLocalClient(serverConfig, request, handler)
+		return runLocallyWithoutServer(serverConfig, request, handler)
+	}
+
+	for _, endpoint := range serverConfig.Platform.Endpoints {
+		if endpoint.Host == clientConfig.Host {
+			return runWithLocalEndpoint(serverConfig, endpoint, request, handler)
+		}
 	}
 
 	for _, sshTarget := range clientConfig.Host.SshTargets {
 		if sshTarget.Host == serverConfig.Host {
-			return runSshClient(e, sshTarget, clientConfig, serverConfig,
+			return runViaSshPassThrough(e, sshTarget, clientConfig, serverConfig,
 				request, handler)
 		}
 	}
+
 	return NoRouteToTargetError
 }

@@ -16,13 +16,17 @@ type RepositoryConfig struct {
 	Host *HostConfig `json:"-"`
 }
 
-func (r *RepositoryConfig) Normalize(name string, hostConfig *HostConfig) {
+func (r *RepositoryConfig) Normalize(name string, hostConfig *HostConfig) error {
 	r.Host = hostConfig
 	r.Name = name
 
 	for platform, platformConfig := range r.Platforms {
-		platformConfig.Normalize(platform, r)
+		err := platformConfig.Normalize(platform, r)
+		if err != nil {
+			return err
+		}
 	}
+	return r.Validate()
 }
 
 func (r *RepositoryConfig) Validate() error {
@@ -134,8 +138,20 @@ func (r *RepositoryConfig) GitPushRemote(e Executor) error {
 	if r.GitRemote == "" {
 		return NoUpstreamError
 	}
-	return r.CheckHere(e, "git", "push", r.GitRemote, "--progress",
+	output, err := r.RunHere(e, "git", "push", r.GitRemote, "--porcelain", "--thin",
 		"+BUILDER_HEAD:BUILDER_HEAD")
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "!\t") {
+			return FailedToPushGitBranchError
+		}
+
+		if line == "Done" {
+			return nil
+		}
+	}
+	return err
 }
 
 func (r *RepositoryConfig) GitPullRemote(e Executor) error {

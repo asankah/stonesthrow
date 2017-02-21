@@ -23,15 +23,20 @@ type HostConfig struct {
 	DefaultRepository *RepositoryConfig `json:"-"`
 }
 
-func (h *HostConfig) Normalize(hostname string) {
+func (h *HostConfig) Normalize(hostname string) error {
 	h.Name = hostname
 	for repository, repositoryConfig := range h.Repositories {
-		repositoryConfig.Normalize(repository, h)
+		err := repositoryConfig.Normalize(repository, h)
+		if err != nil {
+			return err
+		}
 		h.DefaultRepository = repositoryConfig
 	}
 	if len(h.Repositories) != 1 {
 		h.DefaultRepository = nil
 	}
+
+	return h.Validate()
 }
 
 func (h *HostConfig) Validate() error {
@@ -46,4 +51,15 @@ func (h *HostConfig) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (h *HostConfig) SupportsPlatform(platform string) bool {
+	for _, r := range h.Repositories {
+		_, ok := r.Platforms[platform]
+		if ok {
+			return true
+		}
+	}
+
+	return false
 }

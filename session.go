@@ -66,7 +66,9 @@ func (s *Session) CheckCommand(workDir string, command ...string) error {
 	go s.channel.Stream(stdoutPipe)
 	go s.channel.Stream(stderrPipe)
 	cmd.Start()
-	s.processAdder.AddProcess(command, cmd.Process)
+	if s.processAdder != nil {
+		s.processAdder.AddProcess(command, cmd.Process)
+	}
 	cmd.Wait()
 	s.channel.EndCommand(cmd.ProcessState)
 	if cmd.ProcessState.Success() {

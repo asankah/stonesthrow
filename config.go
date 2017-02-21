@@ -74,12 +74,18 @@ func (c *Config) SelectServerConfig(configFile *ConfigurationFile, platform stri
 	c.ConfigurationFile = configFile
 
 	c.PlatformName = platform
-	var ok bool
-	c.Host, ok = configFile.HostsConfig.PlatformHostMap[platform]
-	if !ok {
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+
+	c.Host = configFile.HostsConfig.HostForPlatform(platform, hostname)
+	if c.Host == nil {
 		return fmt.Errorf("%s is not a valid platform", c.PlatformName)
 	}
 
+	var ok bool
 	if repository == "" {
 		for name, config := range c.Host.Repositories {
 			c.Platform, ok = config.Platforms[platform]
@@ -139,7 +145,8 @@ Host :{{with .Host}}
   Stonesthrow : {{.StonesthrowPath}}
   MaxBuildJobs: {{.MaxBuildJobs}}
 {{if .DefaultRepository}}  Default Repo: {{.DefaultRepository.Name}}{{end}}
-{{if .SshTargets}} SSH Targets:{{range .SshTargets}}
+{{if .SshTargets}}
+  SSH Targets :{{range .SshTargets}}
     Hostname  : {{.HostName}}{{if .Host}} [Resolved]{{end}}
     SSH Host  : {{.SshHostName}}
 {{end}}
@@ -156,7 +163,10 @@ Repository:{{with .Repository}}
   Network     : {{.Network}}
   Address     : {{.Address}}
   MbConfigName: {{.MbConfigName}}
-{{end}}{{end}}
+{{if .Endpoints}}
+  Endpoints   :{{range .Endpoints}}
+    Address   : {{.Address}} [{{.Network}}] on {{.HostName}}{{if .Host}} [Resolved]{{end}}{{end}}
+{{end}}{{end}}{{end}}
 `)
 	if err != nil {
 		fmt.Fprint(writer, err.Error())

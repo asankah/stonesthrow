@@ -6,12 +6,12 @@
 				"src": "/usr/local/src/chrome/src",
 				"platforms": {
 					"linux": {
-						"address": "tcp,127.0.0.1:9761",
+						"endpoints": {"b": "tcp,127.0.0.1:9761", "c": "tcp,127.0.0.1:1245"},
 						"out": "out/linux-gn",
 						"mb_config": "debug_bot"
 					},
 					"android": {
-						"address": "tcp,127.0.0.1:9762",
+						"endpoints": {"b": "tcp,127.0.0.1:9762", "c": "tcp,127.0.0.1:1246"},
 						"out": "out/android-gn",
 						"mb_config": "android_debug_bot"
 					}
@@ -28,7 +28,7 @@
 				"src": "/src/chrome/src",
 				"platforms": {
 					"mac": {
-						"address": "tcp,127.0.0.1:9763",
+						"endpoints": {"a": "tcp,127.0.0.1:9761", "c": "tcp,127.0.0.1:1245"},
 						"out": "out/mac-gn",
 						"mb_config": "debug_bot"
 					}
@@ -47,7 +47,6 @@
 				"src": "C:\\src\\chrome\\src",
 				"platforms": {
 					"win": {
-						"address": "tcp,127.0.0.1:9764",
 						"out": "out/win-gn",
 						"mb_config": "debug_bot"
 					}

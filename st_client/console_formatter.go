@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/asankah/stonesthrow"
 	"os"
 	"regexp"
-	"github.com/asankah/stonesthrow"
 	"strings"
 	"text/template"
 	"time"
@@ -229,7 +229,7 @@ func (f *ConsoleFormatter) Format(message interface{}) error {
 
 	case *stonesthrow.JobListMessage:
 		f.Show("jl",
-`Running Jobs:{{range .Jobs}}
+			`Running Jobs:{{range .Jobs}}
   Command: {{title .Request.Command}} {{range .Request.Arguments}}{{.}} {{end}} #{{.Id | printf "%d" | info}}
     On {{.Request.Repository}}@{{location .Request.Revision}}
     Running Since {{.StartTime}} ({{seconds .Duration | info}} seconds){{template "ps" .Processes}}{{else}}No running jobs.
@@ -255,6 +255,9 @@ func (f *ConsoleFormatter) Format(message interface{}) error {
 No running processes.
 {{end}}
 `, t)
+
+	default:
+		fmt.Printf("Unrecognized message %#v", message)
 	}
 
 	return nil
