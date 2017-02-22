@@ -252,6 +252,10 @@ func (s *Session) Clobber(force bool) error {
 	return s.PrepareBuild()
 }
 
+func (s *Session) PushCurrentBranch() error {
+	return s.config.Repository.GitPushCurrentBranch(s)
+}
+
 func (s *Session) setTestRunnerEnvironment() {
 	symbolizerPath := s.config.GetSourcePath(
 		"third_party", "llvm-build", "Release+Asserts", "bin",

@@ -134,12 +134,12 @@ func (r *RepositoryConfig) GitCreateBuilderHead(e Executor) (string, error) {
 	return r.GitRevision(e, "BUILDER_HEAD")
 }
 
-func (r *RepositoryConfig) GitPushRemote(e Executor) error {
+func (r *RepositoryConfig) GitPush(e Executor, branch string) error {
 	if r.GitRemote == "" {
 		return NoUpstreamError
 	}
 	output, err := r.RunHere(e, "git", "push", r.GitRemote, "--porcelain", "--thin",
-		"+BUILDER_HEAD:BUILDER_HEAD")
+		"--force", branch)
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -152,6 +152,14 @@ func (r *RepositoryConfig) GitPushRemote(e Executor) error {
 		}
 	}
 	return err
+}
+
+func (r *RepositoryConfig) GitPushRemote(e Executor) error {
+	return r.GitPush(e, "BUILDER_HEAD")
+}
+
+func (r *RepositoryConfig) GitPushCurrentBranch(e Executor) error {
+	return r.GitPush(e, "HEAD")
 }
 
 func (r *RepositoryConfig) GitPullRemote(e Executor) error {

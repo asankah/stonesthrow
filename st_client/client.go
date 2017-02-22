@@ -78,7 +78,9 @@ func main() {
 	req.Command = arguments[0]
 	req.Arguments = arguments[1:]
 	req.Repository = *repository
-	req.Revision, err = clientConfig.Repository.GitCreateBuilderHead(executor)
+	if stonesthrow.CommandNeedsRevision(req.Command) {
+		req.Revision, err = clientConfig.Repository.GitCreateBuilderHead(executor)
+	}
 	if err != nil {
 		log.Fatal(err.Error())
 	}

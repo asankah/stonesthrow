@@ -62,6 +62,17 @@ var handlerMap = map[string]Handler{
 
 var initOnce sync.Once
 
+
+func CommandNeedsRevision(command string) bool {
+	switch command {
+	case "status", "prepare", "ping", "clobber", "help", "quit", "list":
+		return false
+
+	default:
+		return true
+	}
+}
+
 func AddHandler(command string, doc string, handler RequestHandler) {
 	handlerMap[command] = Handler{doc, handler, false}
 }
