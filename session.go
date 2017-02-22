@@ -3,7 +3,6 @@ package stonesthrow
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -57,8 +56,7 @@ func (s *Session) CheckCommand(workDir string, command ...string) error {
 		s.channel.Error(fmt.Sprintf("Can't open stdout pipe: %s", err.Error()))
 		return err
 	}
-	var stderrPipe io.ReadCloser
-	stderrPipe, err = cmd.StderrPipe()
+	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		s.channel.Error(fmt.Sprintf("Can't open stderr pipe: %s", err.Error()))
 		return err

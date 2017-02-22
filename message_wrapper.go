@@ -36,11 +36,11 @@ func WrapMessage(message interface{}) WrappedMessage {
 	case CommandListMessage:
 		wrapper.CommandList = &t
 
-	case JobListMessage:
-		wrapper.JobList = &t
-
 	case RequestMessage:
 		wrapper.Request = &t
+
+	case JobListMessage:
+		wrapper.JobList = &t
 
 	default:
 		log.Fatalf("Unexpected message type")

@@ -196,7 +196,7 @@ type Server struct {
 }
 
 func (s *Server) createSession(c io.ReadWriter, quitChannel chan error) {
-	jsConn := jsonConnection{in: c, out: c}
+	jsConn := &jsonConnection{in: c, out: c}
 	channel := Channel{conn: jsConn}
 
 	blob, err := channel.Receive()
