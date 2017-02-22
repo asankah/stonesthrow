@@ -46,6 +46,10 @@ func (j sessionTrackerProcessAdder) RemoveProcess(process *os.Process, state *os
 	j.j.RemoveProcessFromSession(j.sessionInfo, process, state)
 }
 
+func (j *SessionTracker) Init() {
+	j.Sessions = make(map[int]*SessionInfo)
+}
+
 // AddSession adds a session to the list of tracked sessions. Calling
 // AddSession is idempotent.
 func (j *SessionTracker) AddSession(s *SessionInfo) {
@@ -188,7 +192,7 @@ func (j *SessionTracker) KillRunningProcesses() ProcessListMessage {
 type Server struct {
 	config     Config
 	quitSignal chan error
-	jobTracker SessionTracker
+	sessionTracker SessionTracker
 }
 
 func (s *Server) createSession(c io.ReadWriter, quitChannel chan error) {
@@ -225,7 +229,7 @@ func (s *Server) createSession(c io.ReadWriter, quitChannel chan error) {
 			channel.Error(err.Error())
 			return
 		}
-		err = s.jobTracker.SwapConnectionForSession(sessionId, jsConn)
+		err = s.sessionTracker.SwapConnectionForSession(sessionId, jsConn)
 		if err != nil {
 			channel.Error(err.Error())
 		}
@@ -237,15 +241,15 @@ func (s *Server) createSession(c io.ReadWriter, quitChannel chan error) {
 		StartTime:      time.Now(),
 		Running:        true}
 
-	s.jobTracker.AddSession(&sessionInfo)
+	s.sessionTracker.AddSession(&sessionInfo)
 
 	sessionInfo.Session = &Session{config: s.config, channel: channel,
-		processAdder: s.jobTracker.GetSessionProcessAdder(&sessionInfo)}
+		processAdder: s.sessionTracker.GetSessionProcessAdder(&sessionInfo)}
 
 	log.Printf("Dispatching request %s", req.Command)
 	DispatchRequest(sessionInfo.Session, *req)
 
-	s.jobTracker.RemoveSession(&sessionInfo)
+	s.sessionTracker.RemoveSession(&sessionInfo)
 	return
 }
 
@@ -254,15 +258,16 @@ func (s *Server) Quit() {
 }
 
 func (s *Server) listJobsHandler(session *Session, req RequestMessage) {
-	session.channel.ListJobs(s.jobTracker.GetJobList())
+	session.channel.ListJobs(s.sessionTracker.GetJobList())
 }
 
 func (s *Server) killProcessHandler(session *Session, req RequestMessage) {
-	session.channel.ListProcesses(s.jobTracker.KillRunningProcesses())
+	session.channel.ListProcesses(s.sessionTracker.KillRunningProcesses())
 }
 
 func (s *Server) Run(config Config) error {
 	nextSessionId = 1
+	s.sessionTracker.Init()
 	AddHandler("jobs", "List running jobs", func(sess *Session, req RequestMessage) error {
 		s.listJobsHandler(sess, req)
 		return nil
