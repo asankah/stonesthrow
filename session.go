@@ -105,6 +105,15 @@ func ShortTargetNameFromGNLabel(label string) string {
 }
 
 func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
+	return map[string]Command{
+		"net_unittests": Command{},
+		"content_unittests": Command{},
+		"content_browsertests": Command{},
+		"unit_tests": Command{},
+		"browser_tests": Command{}}, nil
+}
+
+func (s *Session) GetAllTargetsSlow(testOnly bool) (map[string]Command, error) {
 	command := []string{"gn", "ls", s.config.GetBuildPath(), "--type=executable", "--as=label"}
 	if testOnly {
 		command = append(command, "--testonly=true")

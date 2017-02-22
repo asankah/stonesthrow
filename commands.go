@@ -14,14 +14,15 @@ type Handler struct {
 
 var handlerMap = map[string]Handler{
 	"build": {
-		`Build specified targets.`,
-		func(s *Session, req RequestMessage) error {
+		doc: `Build specified targets.`,
+		handler: func(s *Session, req RequestMessage) error {
 			err := s.SyncWorkdir(req.Revision)
 			if err != nil {
 				return err
 			}
 			return s.BuildTargets(req.Arguments...)
-		}, false},
+		},
+		isTest: false},
 
 	"clean": {
 		`Clean specified targets.`,
@@ -48,6 +49,12 @@ var handlerMap = map[string]Handler{
 			return s.PrepareBuild()
 		}, false},
 
+	"push": {
+		`Push the current branch to upstream.`,
+		func(s *Session, req RequestMessage) error {
+			return s.PushCurrentBranch()
+		}, false},
+
 	"status": {
 		`Run 'git status'.`,
 		func(s *Session, req RequestMessage) error {
@@ -61,7 +68,6 @@ var handlerMap = map[string]Handler{
 		}, false}}
 
 var initOnce sync.Once
-
 
 func CommandNeedsRevision(command string) bool {
 	switch command {
@@ -158,7 +164,7 @@ func addDynamicHandlers(s *Session) {
 	if err != nil {
 		return
 	}
-	for target, _ := range allTestTargets {
+	for target := range allTestTargets {
 		AddTestHandler(target, func(s *Session, req RequestMessage) error {
 			return s.RunTestTarget(target, req.Arguments, req.Revision)
 		})

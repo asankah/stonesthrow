@@ -181,12 +181,15 @@ func (r *RepositoryConfig) GitCheckoutRevision(e Executor, targetRevision string
 		return nil
 	}
 
-	oldDepsHash, err := r.RunHere(e, "git", "hash-object", "DEPS")
+	if err != nil {
+		err = r.GitPullRemote(e)
+	}
+
 	if err != nil {
 		return err
 	}
 
-	err = r.GitPullRemote(e)
+	oldDepsHash, err := r.RunHere(e, "git", "hash-object", "DEPS")
 	if err != nil {
 		return err
 	}
@@ -200,9 +203,11 @@ func (r *RepositoryConfig) GitCheckoutRevision(e Executor, targetRevision string
 	if err != nil {
 		return err
 	}
+
 	if oldDepsHash != newDepsHash {
 		return DepsChangedError
 	}
+
 	return nil
 }
 
