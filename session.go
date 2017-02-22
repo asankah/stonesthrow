@@ -65,15 +65,23 @@ func (s *Session) CheckCommand(workDir string, command ...string) error {
 	}
 	go s.channel.Stream(stdoutPipe)
 	go s.channel.Stream(stderrPipe)
+
 	cmd.Start()
 	if s.processAdder != nil {
 		s.processAdder.AddProcess(command, cmd.Process)
 	}
-	cmd.Wait()
+	err = cmd.Wait()
+	if err != nil {
+		return err
+	}
+	if s.processAdder != nil {
+		s.processAdder.RemoveProcess(cmd.Process, cmd.ProcessState)
+	}
 	s.channel.EndCommand(cmd.ProcessState)
 	if cmd.ProcessState.Success() {
 		return nil
 	}
+
 	return ExternalCommandFailedError
 }
 

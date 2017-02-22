@@ -11,7 +11,6 @@ import (
 )
 
 var nextSessionId int
-var nextProcessId int
 
 type SessionInfo struct {
 	Id             int
@@ -25,6 +24,7 @@ type SessionInfo struct {
 
 type ProcessAdder interface {
 	AddProcess(command []string, process *os.Process)
+	RemoveProcess(process *os.Process, state *os.ProcessState)
 }
 
 type SessionTracker struct {
@@ -40,6 +40,10 @@ type sessionTrackerProcessAdder struct {
 
 func (j sessionTrackerProcessAdder) AddProcess(command []string, process *os.Process) {
 	j.j.AddProcessToSession(j.sessionInfo, command, process)
+}
+
+func (j sessionTrackerProcessAdder) RemoveProcess(process *os.Process, state *os.ProcessState) {
+	j.j.RemoveProcessFromSession(j.sessionInfo, process, state)
 }
 
 // AddSession adds a session to the list of tracked sessions. Calling
@@ -95,35 +99,28 @@ func (j *SessionTracker) GetSessionProcessAdder(s *SessionInfo) ProcessAdder {
 	return sessionTrackerProcessAdder{j: j, sessionInfo: s}
 }
 
-func (j *SessionTracker) AddProcessToSession(s *SessionInfo, command []string, process *os.Process) int {
+func (j *SessionTracker) AddProcessToSession(s *SessionInfo, command []string, process *os.Process) {
 	j.mut.Lock()
-	thisProcessId := nextProcessId
-	nextProcessId += 1
 	sessionInfo := j.Sessions[s.Id]
 	if sessionInfo.ProcessMap == nil {
 		sessionInfo.ProcessMap = make(map[int]*ProcessRecord)
 	}
-	sessionInfo.ProcessMap[thisProcessId] = &ProcessRecord{
+	sessionInfo.ProcessMap[process.Pid] = &ProcessRecord{
 		Process:   process,
 		Command:   command,
 		StartTime: time.Now(),
 		Running:   true}
 	j.mut.Unlock()
-	go func() {
-		state, _ := process.Wait()
-		j.RemoveProcessFromSession(s, thisProcessId, state)
-	}()
-	return thisProcessId
 }
 
-func (j *SessionTracker) RemoveProcessFromSession(s *SessionInfo, processId int, state *os.ProcessState) {
+func (j *SessionTracker) RemoveProcessFromSession(s *SessionInfo, process *os.Process, state *os.ProcessState) {
 	j.mut.Lock()
 	defer j.mut.Unlock()
 	sessionInfo, ok := j.Sessions[s.Id]
 	if !ok {
 		return
 	}
-	processRecord, ok := sessionInfo.ProcessMap[processId]
+	processRecord, ok := sessionInfo.ProcessMap[process.Pid]
 	if !ok {
 		return
 	}
