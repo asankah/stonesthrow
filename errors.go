@@ -22,6 +22,7 @@ var (
 	UnrecognizedResponseError  = errors.New("server sent an unrecognized response")
 	WorkTreeDirtyError         = errors.New("working directory is dirty")
 	FailedToPushGitBranchError = errors.New("failed to push git branch")
+	EndpointNotFoundError      = errors.New("endpoint not found")
 )
 
 type ConfigError struct {

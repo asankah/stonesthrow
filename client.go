@@ -91,30 +91,7 @@ func runLocallyWithoutServer(serverConfig Config, request RequestMessage, handle
 	return nil
 }
 
-func RunPassthroughClientLocally(serverConfig Config) error {
-	jsConn := jsonConnection{in: os.Stdin, out: os.Stdout}
-	channel := Channel{conn: jsConn}
-	session := Session{config: serverConfig, channel: channel, processAdder: nil}
-
-	maybeRequeset, err := channel.Receive()
-	if err != nil {
-		return err
-	}
-
-	req, ok := maybeRequeset.(*RequestMessage)
-	if !ok {
-		return InvalidArgumentError
-	}
-
-	DispatchRequest(&session, *req)
-	return nil
-}
-
 func RunPassthroughClient(clientConfig, serverConfig Config) error {
-	if clientConfig.Host == serverConfig.Host {
-		return RunPassthroughClientLocally(serverConfig)
-	}
-
 	var endpoint Endpoint
 	for _, endpoint = range serverConfig.Platform.Endpoints {
 		if endpoint.Host == serverConfig.Host {

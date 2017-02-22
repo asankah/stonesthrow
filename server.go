@@ -279,7 +279,13 @@ The ID of the job should be specified as the only argument. Any new processes st
 		return ConfigIncompleteError
 	}
 	s.config = config
-	listener, err := net.Listen(config.Platform.Network, config.Platform.Address)
+	ep := s.config.Platform.EndpointFor(config.Host)
+	if ep == nil {
+		return EndpointNotFoundError
+	}
+
+	log.Printf("Starting server for %s at %s on %s. This is PID %d", config.PlatformName, ep.Address, ep.HostName, os.Getpid())
+	listener, err := net.Listen(ep.Network, ep.Address)
 	if err != nil {
 		return err
 	}

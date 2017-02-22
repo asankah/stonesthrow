@@ -48,7 +48,6 @@ func main() {
 		}
 	}
 
-	log.Printf("Starting server for %s at %s. This is PID %d", config.PlatformName, config.Platform.Address, os.Getpid())
 	server := stonesthrow.Server{}
 	reload := false
 
@@ -59,7 +58,11 @@ func main() {
 			return nil
 		})
 
-	server.Run(config)
+	err = server.Run(config)
+	if err != nil {
+		log.Printf("Failed to start server: %s", err.Error())
+		os.Exit(1)
+	}
 
 	if reload {
 		log.Print("Launching st_reload to reload and update.")

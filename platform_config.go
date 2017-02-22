@@ -23,8 +23,6 @@ type PlatformConfig struct {
 	BuildPath  string              `json:"-"`
 	Repository *RepositoryConfig   `json:"-"`
 	Endpoints  map[string]Endpoint `json:"-"`
-	Network    string              `json:"-"`
-	Address    string              `json:"-"`
 }
 
 func (p *PlatformConfig) Normalize(name string, repo *RepositoryConfig) error {
@@ -43,6 +41,15 @@ func (p *PlatformConfig) Normalize(name string, repo *RepositoryConfig) error {
 		}
 	}
 	return p.Validate()
+}
+
+func (p *PlatformConfig) EndpointFor(host *HostConfig) *Endpoint {
+	for _, ep := range p.Endpoints {
+		if ep.Host == host {
+			return &ep
+		}
+	}
+	return nil
 }
 
 func (p *PlatformConfig) Validate() error {
