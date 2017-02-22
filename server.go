@@ -1,7 +1,6 @@
 package stonesthrow
 
 import (
-	"bufio"
 	"io"
 	"log"
 	"net"
@@ -195,11 +194,8 @@ type Server struct {
 	jobTracker SessionTracker
 }
 
-func (s *Server) createSession(c net.Conn, quitChannel chan error) {
-	defer c.Close()
-
-	readerWriter := bufio.NewReadWriter(bufio.NewReader(c), bufio.NewWriter(c))
-	jsConn := jsonConnection{stream: readerWriter}
+func (s *Server) createSession(c io.ReadWriter, quitChannel chan error) {
+	jsConn := jsonConnection{in: c, out: c}
 	channel := Channel{conn: jsConn}
 
 	blob, err := channel.Receive()
@@ -312,7 +308,10 @@ The ID of the job should be specified as the only argument. Any new processes st
 		select {
 		case conn = <-connections:
 			conn := conn
-			go s.createSession(conn, s.quitSignal)
+			go func() {
+				s.createSession(conn, s.quitSignal)
+				conn.Close()
+			}()
 
 		case err = <-s.quitSignal:
 			return err

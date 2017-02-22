@@ -1,7 +1,6 @@
 package stonesthrow
 
 import (
-	"bufio"
 	"encoding/gob"
 	"io"
 	"log"
@@ -9,7 +8,9 @@ import (
 )
 
 type jsonConnection struct {
-	stream *bufio.ReadWriter
+	in io.Reader
+	out io.Writer
+
 	mut sync.Mutex
 	encoder *gob.Encoder
 	decoder *gob.Decoder
@@ -20,7 +21,7 @@ func (c jsonConnection) Receive() (interface{}, error) {
 
 	c.mut.Lock()
 	if c.decoder == nil {
-		c.decoder = gob.NewDecoder(c.stream)
+		c.decoder = gob.NewDecoder(c.in)
 	}
 	err := c.decoder.Decode(&wrapper)
 	c.mut.Unlock()
@@ -39,12 +40,9 @@ func (c jsonConnection) Receive() (interface{}, error) {
 func (c jsonConnection) Send(message interface{}) error {
 	c.mut.Lock()
 	if c.encoder == nil {
-		c.encoder = gob.NewEncoder(c.stream)
+		c.encoder = gob.NewEncoder(c.out)
 	}
 	err := c.encoder.Encode(WrapMessage(message))
-	if err == nil {
-		c.stream.Flush()
-	}
 	c.mut.Unlock()
 	return err
 }

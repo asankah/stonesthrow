@@ -1,7 +1,6 @@
 package stonesthrow
 
 import (
-	"bufio"
 	"io"
 	"net"
 	"os"
@@ -9,11 +8,13 @@ import (
 	"path/filepath"
 )
 
-func runClientWithStream(request RequestMessage, handler chan interface{}, reader io.Reader,
+func runClientWithStream(
+	request RequestMessage,
+	handler chan interface{},
+	reader io.Reader,
 	writer io.Writer) error {
 
-	stream := bufio.NewReadWriter(bufio.NewReader(reader), bufio.NewWriter(writer))
-	jsconn := jsonConnection{stream: stream}
+	jsconn := jsonConnection{in: reader, out: writer}
 	jsconn.Send(request)
 
 	for {
@@ -29,7 +30,12 @@ func runClientWithStream(request RequestMessage, handler chan interface{}, reade
 	}
 }
 
-func runWithLocalEndpoint(serverConfig Config, endpoint Endpoint, request RequestMessage, handler chan interface{}) error {
+func runWithLocalEndpoint(
+	serverConfig Config,
+	endpoint Endpoint,
+	request RequestMessage,
+	handler chan interface{}) error {
+
 	conn, err := net.Dial(endpoint.Network, endpoint.Address)
 	if err != nil {
 		return err
@@ -85,7 +91,30 @@ func runLocallyWithoutServer(serverConfig Config, request RequestMessage, handle
 	return nil
 }
 
-func RunPassthroughClient(serverConfig Config) error {
+func RunPassthroughClientLocally(serverConfig Config) error {
+	jsConn := jsonConnection{in: os.Stdin, out: os.Stdout}
+	channel := Channel{conn: jsConn}
+	session := Session{config: serverConfig, channel: channel, processAdder: nil}
+
+	maybeRequeset, err := channel.Receive()
+	if err != nil {
+		return err
+	}
+
+	req, ok := maybeRequeset.(*RequestMessage)
+	if !ok {
+		return InvalidArgumentError
+	}
+
+	DispatchRequest(&session, *req)
+	return nil
+}
+
+func RunPassthroughClient(clientConfig, serverConfig Config) error {
+	if clientConfig.Host == serverConfig.Host {
+		return RunPassthroughClientLocally(serverConfig)
+	}
+
 	var endpoint Endpoint
 	for _, endpoint = range serverConfig.Platform.Endpoints {
 		if endpoint.Host == serverConfig.Host {

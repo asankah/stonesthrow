@@ -44,17 +44,17 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
+	err = clientConfig.SelectClientConfig(&configFile, *serverPlatform, *repository)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
 	if *passthrough {
-		err = stonesthrow.RunPassthroughClient(serverConfig)
+		err = stonesthrow.RunPassthroughClient(clientConfig, serverConfig)
 		if err != nil {
 			log.Fatalf("Client failed : %#v", err)
 		}
 		return
-	}
-
-	err = clientConfig.SelectClientConfig(&configFile, *serverPlatform, *repository)
-	if err != nil {
-		log.Fatal(err.Error())
 	}
 
 	if *showConfig {
