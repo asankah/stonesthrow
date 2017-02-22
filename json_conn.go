@@ -1,7 +1,7 @@
 package stonesthrow
 
 import (
-	"encoding/gob"
+	"encoding/json"
 	"io"
 	"log"
 	"sync"
@@ -12,8 +12,8 @@ type jsonConnection struct {
 	out io.Writer
 
 	mut sync.Mutex
-	encoder *gob.Encoder
-	decoder *gob.Decoder
+	encoder *json.Encoder
+	decoder *json.Decoder
 }
 
 func (c jsonConnection) Receive() (interface{}, error) {
@@ -21,7 +21,7 @@ func (c jsonConnection) Receive() (interface{}, error) {
 
 	c.mut.Lock()
 	if c.decoder == nil {
-		c.decoder = gob.NewDecoder(c.in)
+		c.decoder = json.NewDecoder(c.in)
 	}
 	err := c.decoder.Decode(&wrapper)
 	c.mut.Unlock()
@@ -40,7 +40,7 @@ func (c jsonConnection) Receive() (interface{}, error) {
 func (c jsonConnection) Send(message interface{}) error {
 	c.mut.Lock()
 	if c.encoder == nil {
-		c.encoder = gob.NewEncoder(c.out)
+		c.encoder = json.NewEncoder(c.out)
 	}
 	err := c.encoder.Encode(WrapMessage(message))
 	c.mut.Unlock()
