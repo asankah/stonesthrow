@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"strings"
+	"path/filepath"
 )
 
 type RepositoryConfig struct {
@@ -45,6 +46,10 @@ func (r *RepositoryConfig) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (r *RepositoryConfig) RelativePath(path string) string {
+	return filepath.Join(r.SourcePath, path)
 }
 
 func (r *RepositoryConfig) RunHere(e Executor, command ...string) (string, error) {
@@ -171,6 +176,10 @@ func (r *RepositoryConfig) GitPullRemote(e Executor) error {
 		"refs/remotes/origin/master:refs/heads/origin")
 }
 
+func (r *RepositoryConfig) GitHashObject(e Executor, path string) (string, error) {
+	return r.RunHere(e, "git", "hash-object", path)
+}
+
 func (r *RepositoryConfig) GitCheckoutRevision(e Executor, targetRevision string) error {
 	currentWorkTree, err := r.GitCreateWorkTree(e)
 	if err != nil {
@@ -189,23 +198,9 @@ func (r *RepositoryConfig) GitCheckoutRevision(e Executor, targetRevision string
 		return err
 	}
 
-	oldDepsHash, err := r.RunHere(e, "git", "hash-object", "DEPS")
-	if err != nil {
-		return err
-	}
-
 	err = r.CheckHere(e, "git", "checkout", "--force", "--quiet", "--no-progress", "--detach", targetRevision)
 	if err != nil {
 		return err
-	}
-
-	newDepsHash, err := r.RunHere(e, "git", "hash-object", "DEPS")
-	if err != nil {
-		return err
-	}
-
-	if oldDepsHash != newDepsHash {
-		return DepsChangedError
 	}
 
 	return nil

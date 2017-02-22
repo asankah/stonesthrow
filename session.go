@@ -90,7 +90,7 @@ func (s *Session) runMB(command ...string) error {
 
 	arguments := []string{
 		"python", s.config.GetSourcePath("tools", "mb", "mb.py"),
-		command[0],
+		command[0], s.config.GetBuildPath(),
 		"--config=" + s.config.Platform.MbConfigName}
 	if s.config.Host.GomaPath != "" {
 		arguments = append(arguments, "--goma-dir", s.config.Host.GomaPath)
@@ -112,9 +112,9 @@ func ShortTargetNameFromGNLabel(label string) string {
 
 func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
 	return map[string]Command{
-		"net_unittests": Command{},
-		"content_unittests": Command{},
-		"content_browsertests": Command{},
+		"net_unittests": Command{Aliases:[]string{"nu"}},
+		"content_unittests": Command{Aliases:[]string{"cu"}},
+		"content_browsertests": Command{Aliases:[]string{"cb"}},
 		"unit_tests": Command{},
 		"browser_tests": Command{}}, nil
 }
@@ -139,15 +139,18 @@ func (s *Session) GetAllTargetsSlow(testOnly bool) (map[string]Command, error) {
 }
 
 func (s *Session) SyncWorkdir(targetHash string) error {
+	depsFile := s.config.GetSourcePath("DEPS")
+	oldDepsHash := s.config.Repository.GitHashObject(depsFile)
 	err := s.config.Repository.GitCheckoutRevision(s, targetHash)
-	if err == DepsChangedError {
-		s.channel.Info("DEPS changed. Running 'sync'")
-		err = s.RunGclientSync()
-	}
+	newDepsHash := s.config.Repository.GitHashObject(depsFile)
 	if err != nil {
 		return err
 	}
-	return s.PrepareBuild()
+	if oldDepsHash != newDepsHash {
+		s.channel.Info("DEPS changed. Running 'sync'")
+		return s.RunGclientSync()
+	}
+	return nil
 }
 
 func (s *Session) RunGclientSync() error {
@@ -164,7 +167,7 @@ func (s *Session) PrepareBuild() error {
 			return err
 		}
 	}
-	return s.runMB("gen", s.config.GetBuildPath())
+	return s.runMB("gen")
 }
 
 func (s *Session) EnsureGomaIfNecessary() error {
@@ -291,11 +294,8 @@ func (s *Session) RunTestTarget(target string, args []string, revision string) e
 		args = make([]string, 0)
 	}
 
-	commandLine := make([]string, 0)
+	commandLine := []string{"run", target, "--no-build", "--"}
 	testFilters := make([]string, 0)
-
-	// TODO(asanka): Need to determine the correct commandline to use instead of this.
-	commandLine = append(commandLine, s.config.GetBuildPath(target))
 
 	for _, arg := range args {
 		switch {
@@ -324,7 +324,7 @@ func (s *Session) RunTestTarget(target string, args []string, revision string) e
 		return err
 	}
 	s.setTestRunnerEnvironment()
-	return s.CommandAtSourceDir(commandLine...)
+	return s.runMB(commandLine...)
 }
 
 func (s *Session) GitStatus() error {
