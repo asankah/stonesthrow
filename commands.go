@@ -57,6 +57,20 @@ var handlerMap = map[string]Handler{
 			return s.PrepareBuild()
 		}, false},
 
+	"pull": {
+		`Pull a specific branch from upstream.`,
+		func(s *Session, req RequestMessage) error {
+			if len(req.Arguments) != 1 {
+				s.channel.Error("Need to specify branch")
+				return InvalidArgumentError
+			}
+			err := s.config.Repository.GitFetch(s, req.Arguments[0])
+			if err != nil {
+				return err
+			}
+			return s.config.Repository.GitCheckoutRevision(s, req.Arguments[0])
+		}, false},
+
 	"push": {
 		`Push the current branch to upstream.`,
 		func(s *Session, req RequestMessage) error {

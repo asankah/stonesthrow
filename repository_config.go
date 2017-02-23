@@ -164,7 +164,15 @@ func (r *RepositoryConfig) GitPullRemote(e Executor) error {
 	}
 	return r.CheckHere(e, "git", "fetch", r.GitRemote, "--progress",
 		"+BUILDER_HEAD:BUILDER_HEAD",
-		"refs/remotes/origin/master:refs/heads/origin")
+		"refs/remotes/origin/master:refs/heads/upstream-origin")
+}
+
+func (r *RepositoryConfig) GitFetch(e Executor, branch string) error {
+	if r.GitRemote == "" {
+		return NoUpstreamError
+	}
+	return r.CheckHere(e, "git", "fetch", r.GitRemote, fmt.Sprintf("+%s:%s", branch, branch),
+		"refs/remotes/origin/master:refs/heads/upstream-origin")
 }
 
 func (r *RepositoryConfig) GitHashObject(e Executor, path string) (string, error) {
@@ -189,8 +197,7 @@ func (r *RepositoryConfig) GitCheckoutRevision(e Executor, targetRevision string
 		return err
 	}
 
-	err = r.CheckHere(e, "git", "checkout", "--force", "--quiet", "--no-progress",
-		"--detach", targetRevision)
+	err = r.CheckHere(e, "git", "checkout", "--force", "--quiet", "--no-progress", targetRevision)
 	if err != nil {
 		return err
 	}
