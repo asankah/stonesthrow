@@ -47,7 +47,7 @@ func (s *Session) CheckCommand(workDir string, command ...string) error {
 		return EmptyCommandError
 	}
 
-	s.channel.BeginCommand(command, false)
+	s.channel.BeginCommand(workDir, command, false)
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Env = nil // inherit
 	cmd.Dir = workDir
@@ -157,7 +157,7 @@ func (s *Session) RunGclientSync() error {
 	if s.config.PlatformName == "mac" {
 		os.Setenv("FORCE_MAC_TOOLCHAIN", "1")
 	}
-	return s.CommandAtSourceDir("gclient", "sync")
+	return s.config.Repository.CheckHere(s, "gclient", "sync")
 }
 
 func (s *Session) PrepareBuild() error {
@@ -342,7 +342,7 @@ func (s *Session) updateGitWorkDir(workDir string) error {
 
 func (s *Session) GitRebaseUpdate(fetch bool) error {
 	if s.config.Repository.GitRemote != "" {
-		return OnlyOnMasterError
+		return NoUpstreamError
 	}
 
 	output, err := s.config.Repository.RunHere(s, "git", "status", "--porcelain",
@@ -362,11 +362,13 @@ func (s *Session) GitRebaseUpdate(fetch bool) error {
 	previousHead, _ := s.config.Repository.RunHere(s, "git", "symbolic-ref", "-q", "HEAD")
 
 	if fetch {
+		s.channel.Info("Updating clank")
 		err = s.updateGitWorkDir(s.config.GetSourcePath("clank"))
 		if err != nil {
 			return err
 		}
 
+		s.channel.Info("Updating chromium")
 		err = s.updateGitWorkDir(s.config.GetSourcePath())
 		if err != nil {
 			return err
@@ -378,7 +380,8 @@ func (s *Session) GitRebaseUpdate(fetch bool) error {
 		}
 	}
 
-	err = s.CommandAtSourceDir("git", "rebase-update",
+	err = s.config.Repository.CheckHere(s, "git", "clean", "-f")
+	err = s.config.Repository.CheckHere(s, "git", "rebase-update",
 		"--no-fetch", "--keep-going")
 	if previousHead != "" {
 		s.CommandAtSourceDir("git", "checkout", previousHead)

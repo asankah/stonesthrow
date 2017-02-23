@@ -25,9 +25,11 @@ func (c Channel) Stream(stream io.Reader) {
 	}
 }
 
-func (c Channel) BeginCommand(command []string, isInteractive bool) {
-	c.conn.Send(BeginCommandMessage{IsInteractive: isInteractive,
-		Command: command})
+func (c Channel) BeginCommand(workdir string, command []string, isInteractive bool) {
+	c.conn.Send(BeginCommandMessage{
+		IsInteractive: isInteractive,
+		WorkDir:       workdir,
+		Command:       command})
 }
 
 func (c Channel) EndCommand(processState *os.ProcessState) {

@@ -31,10 +31,12 @@ func main() {
 	if err != nil {
 		fmt.Printf("Parent process %d not found. Proceeding anyway.")
 	} else {
+		fmt.Printf("Waiting for parent process to complete.")
 		proc.Wait()
 		proc.Release()
 	}
 
+	fmt.Printf("Updating %s", *goPackage)
 	err = RunCommandAndWait("go", "get", "-u", *goPackage)
 	if err != nil {
 		fmt.Printf("Failed to run 'go get -u %s': %s", *goPackage, err.Error())
@@ -43,6 +45,7 @@ func main() {
 
 	args := flag.Args()
 	if len(args) == 0 {
+		fmt.Println("Done")
 		return
 	}
 
