@@ -61,14 +61,26 @@ func (s *Session) CheckCommand(workDir string, command ...string) error {
 		s.channel.Error(fmt.Sprintf("Can't open stderr pipe: %s", err.Error()))
 		return err
 	}
-	go s.channel.Stream(stdoutPipe)
-	go s.channel.Stream(stderrPipe)
+
+	quitter := make(chan int)
+	go func() {
+		s.channel.Stream(stdoutPipe)
+		quitter <- 1
+	}()
+	go func() {
+		s.channel.Stream(stderrPipe)
+		quitter <- 2
+	}()
 
 	cmd.Start()
 	if s.processAdder != nil {
 		s.processAdder.AddProcess(command, cmd.Process)
 	}
 	err = cmd.Wait()
+	stdoutPipe.Close()
+	stderrPipe.Close()
+	<-quitter
+	<-quitter
 	if err != nil {
 		return err
 	}
