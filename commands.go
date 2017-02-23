@@ -33,9 +33,22 @@ var handlerMap = map[string]Handler{
 		isTest: false},
 
 	"clean": {
-		`Clean specified targets.`,
+		`'clean build' cleans the build directory, while 'clean source' cleans the source directory.`,
 		func(s *Session, req RequestMessage) error {
-			return s.CleanTargets(req.Arguments...)
+			switch {
+			case len(req.Arguments) >= 1 && req.Arguments[0] == "build":
+				return s.CleanTargets(req.Arguments...)
+
+			case len(req.Arguments) == 1 && req.Arguments[0] == "source":
+				s.channel.Info("Specify 'clean source force' to remove files not recognized by git.")
+				return s.config.Repository.CheckHere(s, "git", "clean", "-n")
+
+			case len(req.Arguments) == 2 && req.Arguments[0] == "source" && req.Arguments[1] == "force":
+				return s.config.Repository.CheckHere(s, "git", "clean", "-f")
+
+			default:
+				return InvalidArgumentError
+			}
 		}, false},
 
 	"clobber": {
