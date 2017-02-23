@@ -29,14 +29,14 @@ func main() {
 
 	proc, err := os.FindProcess(*parentProcess)
 	if err != nil {
-		fmt.Printf("Parent process %d not found. Proceeding anyway.")
+		fmt.Printf("Parent process %d not found. Proceeding anyway.\n", *parentProcess)
 	} else {
-		fmt.Printf("Waiting for parent process to complete.")
+		fmt.Printf("Waiting for process %d to complete.\n", *parentProcess)
 		proc.Wait()
 		proc.Release()
 	}
 
-	fmt.Printf("Updating %s", *goPackage)
+	fmt.Printf("Updating %s\n", *goPackage)
 	err = RunCommandAndWait("go", "get", "-u", *goPackage)
 	if err != nil {
 		fmt.Printf("Failed to run 'go get -u %s': %s", *goPackage, err.Error())
@@ -49,6 +49,7 @@ func main() {
 		return
 	}
 
+	fmt.Printf("Running %s\n", args)
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
