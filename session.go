@@ -42,7 +42,7 @@ func (s *Session) CommandAtSourceDir(command ...string) error {
 }
 
 func (s *Session) CheckCommand(workDir string, command ...string) error {
-	// Nothing to do
+	// Nothing to do?
 	if len(command) == 0 {
 		return EmptyCommandError
 	}
@@ -140,12 +140,12 @@ func (s *Session) GetAllTargetsSlow(testOnly bool) (map[string]Command, error) {
 
 func (s *Session) SyncWorkdir(targetHash string) error {
 	depsFile := s.config.GetSourcePath("DEPS")
-	oldDepsHash := s.config.Repository.GitHashObject(depsFile)
+	oldDepsHash, _ := s.config.Repository.GitHashObject(s, depsFile)
 	err := s.config.Repository.GitCheckoutRevision(s, targetHash)
-	newDepsHash := s.config.Repository.GitHashObject(depsFile)
 	if err != nil {
 		return err
 	}
+	newDepsHash, _ := s.config.Repository.GitHashObject(s, depsFile)
 	if oldDepsHash != newDepsHash {
 		s.channel.Info("DEPS changed. Running 'sync'")
 		return s.RunGclientSync()

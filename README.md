@@ -12,4 +12,4 @@ There's probably not a whole lot here yet, but here's a quick overview.
 * Each build configuration will expose tools for building, running, and
   collecting test or build artifacts.
 
-Currently capabilities are targetted at developing Chromium.
+Currently capabilities are targeted at developing Chromium.
