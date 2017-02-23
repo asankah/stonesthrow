@@ -148,6 +148,7 @@ func (f *ConsoleFormatter) GetTemplate(name string, templateValue string) (*temp
 	t.Funcs(template.FuncMap{
 		"title":    CTitle,
 		"heading":  CInfo,
+		"dark":     CDark,
 		"info":     CInfo,
 		"field":    CSubject,
 		"subject":  CSubject,
@@ -231,13 +232,13 @@ func (f *ConsoleFormatter) Format(message interface{}) error {
 		f.Show("jl",
 			`Running Jobs:{{range .Jobs}}
   Command: {{title .Request.Command}} {{range .Request.Arguments}}{{.}} {{end}} #{{.Id | printf "%d" | info}}
-    On {{.Request.Repository}}@{{location .Request.Revision}}
-    Running Since {{.StartTime}} ({{seconds .Duration | info}} seconds){{template "ps" .Processes}}{{else}}No running jobs.
+{{if .Request.Revision}}    On {{.Request.Repository}}@{{location .Request.Revision}}
+{{end}}    Running Since {{.StartTime}} ({{seconds .Duration | info}} seconds){{template "ps" .Processes}}{{else}}No running jobs.
 {{end}}
 {{define "ps"}}{{if .}}
-    Child Processes:{{range .}}
-      Command: {{range .Command}}{{.}} {{end}}{{if .Running}}
-        Running since {{.StartTime}} ({{seconds .Duration | info}} seconds)
+    Processes:{{range .}}
+      {{if .Running}}{{location "Running"}}{{else}}{{dark "Done"}}{{end}}: {{range .Command}}{{. | info}} {{end}}{{if .Running}}
+        Since {{.StartTime}} ({{seconds .Duration | info}} seconds)
 {{else}}
         Ran from {{.StartTime}} to {{.EndTime}} ({{seconds .Duration | info}} seconds)
 	System time {{seconds .SystemTime | info}} seconds

@@ -106,7 +106,7 @@ var initOnce sync.Once
 
 func CommandNeedsRevision(command string) bool {
 	switch command {
-	case "status", "prepare", "ping", "clobber", "help", "quit", "list", "jobs", "killall", "join":
+	case "status", "prepare", "ping", "clobber", "help", "quit", "list", "jobs", "killall", "join", "push", "clean", "sync":
 		return false
 
 	default:
