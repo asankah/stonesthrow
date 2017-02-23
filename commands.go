@@ -13,6 +13,14 @@ type Handler struct {
 }
 
 var handlerMap = map[string]Handler{
+	"branch": {
+		doc: `List local branches.`,
+		handler: func(s *Session, req RequestMessage) error {
+			return s.config.Repository.CheckHere(
+				s, "git", "branch", "--list", "-vvv")
+		},
+		isTest: false},
+
 	"build": {
 		doc: `Build specified targets.`,
 		handler: func(s *Session, req RequestMessage) error {

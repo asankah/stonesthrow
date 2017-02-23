@@ -42,6 +42,10 @@ func main() {
 	}
 
 	args := flag.Args()
+	if len(args) == 0 {
+		return
+	}
+
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

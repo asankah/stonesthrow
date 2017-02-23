@@ -38,7 +38,7 @@ func (s *Session) RunCommand(workdir string, command ...string) (string, error) 
 }
 
 func (s *Session) CommandAtSourceDir(command ...string) error {
-	return s.CheckCommand(s.config.GetSourcePath(), command...)
+	return s.config.Repository.CheckHere(s, command...)
 }
 
 func (s *Session) CheckCommand(workDir string, command ...string) error {
@@ -112,11 +112,11 @@ func ShortTargetNameFromGNLabel(label string) string {
 
 func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
 	return map[string]Command{
-		"net_unittests": Command{Aliases:[]string{"nu"}},
-		"content_unittests": Command{Aliases:[]string{"cu"}},
-		"content_browsertests": Command{Aliases:[]string{"cb"}},
-		"unit_tests": Command{},
-		"browser_tests": Command{}}, nil
+		"net_unittests":        {Aliases: []string{"nu"}},
+		"content_unittests":    {Aliases: []string{"cu"}},
+		"content_browsertests": {Aliases: []string{"cb"}},
+		"unit_tests":           {},
+		"browser_tests":        {}}, nil
 }
 
 func (s *Session) GetAllTargetsSlow(testOnly bool) (map[string]Command, error) {

@@ -3,8 +3,8 @@ package stonesthrow
 import (
 	"bufio"
 	"fmt"
-	"strings"
 	"path/filepath"
+	"strings"
 )
 
 type RepositoryConfig struct {
@@ -64,30 +64,21 @@ func (r *RepositoryConfig) GitRevision(e Executor, name string) (string, error) 
 	return r.RunHere(e, "git", "rev-parse", name)
 }
 
-func (r *RepositoryConfig) GitHasUnmergedChanges(e Executor) bool {
-	gitStatus, err := r.RunHere(e, "git", "status", "--porcelain=2",
-		"--untracked-files=no", "--ignore-submodules")
-	if err != nil {
-		return false
-	}
-
-	scanner := bufio.NewScanner(strings.NewReader(gitStatus))
-	for scanner.Scan() {
-		text := scanner.Text()
-		if strings.HasPrefix(text, "u ") {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (r *RepositoryConfig) GitCreateWorkTree(e Executor) (string, error) {
-	if r.GitHasUnmergedChanges(e) {
+	status, err := r.GitStatus(e)
+	if err != nil {
+		return "", err
+	}
+
+	if status.HasUnmerged {
 		return "", UnmergedChangesExistError
 	}
 
-	_, err := r.RunHere(e, "git", "add", "-u")
+	if !status.HasModified {
+		return r.GitRevision(e, "HEAD^{tree}")
+	}
+
+	_, err = r.RunHere(e, "git", "add", "-u")
 	if err != nil {
 		return "", err
 	}
@@ -95,15 +86,15 @@ func (r *RepositoryConfig) GitCreateWorkTree(e Executor) (string, error) {
 }
 
 func (r *RepositoryConfig) GitCreateBuilderHead(e Executor) (string, error) {
-	modifiedFiles, err := r.GitGetModifiedFiles(e)
+	status, err := r.GitStatus(e)
 	if err != nil {
 		return "", err
 	}
 
 	var tree string
-	if len(modifiedFiles) > 0 {
+	if len(status.ModifiedFiles) > 0 {
 		command := []string{"git", "update-index", "--"}
-		command = append(command, modifiedFiles...)
+		command = append(command, status.ModifiedFiles...)
 		_, err = r.RunHere(e, command...)
 		if err != nil {
 			return "", err
@@ -198,7 +189,8 @@ func (r *RepositoryConfig) GitCheckoutRevision(e Executor, targetRevision string
 		return err
 	}
 
-	err = r.CheckHere(e, "git", "checkout", "--force", "--quiet", "--no-progress", "--detach", targetRevision)
+	err = r.CheckHere(e, "git", "checkout", "--force", "--quiet", "--no-progress",
+		"--detach", targetRevision)
 	if err != nil {
 		return err
 	}
@@ -206,14 +198,21 @@ func (r *RepositoryConfig) GitCheckoutRevision(e Executor, targetRevision string
 	return nil
 }
 
-func (r *RepositoryConfig) GitGetModifiedFiles(e Executor) ([]string, error) {
+type GitStatusResult struct {
+	HasUnmerged   bool
+	HasModified   bool
+	ModifiedFiles []string
+}
+
+func (r *RepositoryConfig) GitStatus(e Executor) (GitStatusResult, error) {
+	var result GitStatusResult
 	gitStatus, err := r.RunHere(e, "git", "status", "--porcelain=2",
 		"--untracked-files=no", "--ignore-submodules")
 	if err != nil {
-		return nil, err
+		return result, err
 	}
 
-	modifiedFiles := []string{}
+	result.ModifiedFiles = []string{}
 	scanner := bufio.NewScanner(strings.NewReader(gitStatus))
 	for scanner.Scan() {
 		text := scanner.Text()
@@ -221,7 +220,7 @@ func (r *RepositoryConfig) GitGetModifiedFiles(e Executor) ([]string, error) {
 			continue
 		}
 		if strings.HasPrefix(text, "u ") {
-			return nil, UnmergedChangesExistError
+			result.HasUnmerged = true
 		}
 		// Normal changed entry.
 		if strings.HasPrefix(text, "1 ") {
@@ -229,7 +228,8 @@ func (r *RepositoryConfig) GitGetModifiedFiles(e Executor) ([]string, error) {
 			if len(fields) < 9 || len(fields[1]) != 2 || fields[1][1] == '.' {
 				continue
 			}
-			modifiedFiles = append(modifiedFiles, fields[8])
+			result.ModifiedFiles = append(result.ModifiedFiles, fields[8])
+			result.HasModified = true
 		}
 
 		if strings.HasPrefix(text, "2 ") {
@@ -241,10 +241,10 @@ func (r *RepositoryConfig) GitGetModifiedFiles(e Executor) ([]string, error) {
 			if len(paths) != 2 {
 				continue
 			}
-
-			modifiedFiles = append(modifiedFiles, paths[0])
+			result.HasModified = true
+			result.ModifiedFiles = append(result.ModifiedFiles, paths[0])
 		}
 	}
 
-	return modifiedFiles, nil
+	return result, nil
 }
