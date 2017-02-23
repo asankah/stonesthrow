@@ -22,7 +22,7 @@ func main() {
 		"Path to Go package that will be updated. Runs 'go get -u <package>'.")
 	flag.Parse()
 
-	if *parentProcess == -1 || *goPackage == "" || flag.NArg() == 0 {
+	if *parentProcess == -1 || *goPackage == "" {
 		fmt.Println("Invalid command line arguments")
 		os.Exit(1)
 	}
