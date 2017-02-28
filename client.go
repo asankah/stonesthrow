@@ -115,6 +115,7 @@ func RunPassthroughClient(clientConfig, serverConfig Config) error {
 
 	go func() {
 		io.Copy(conn, os.Stdin)
+		quit <- 0
 	}()
 
 	go func() {
@@ -122,6 +123,7 @@ func RunPassthroughClient(clientConfig, serverConfig Config) error {
 		quit <- 0
 	}()
 
+	<-quit
 	<-quit
 	return nil
 }

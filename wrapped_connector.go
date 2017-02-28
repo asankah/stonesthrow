@@ -4,7 +4,7 @@ import (
 	"encoding/gob"
 	"io"
 	"log"
-	"runtime/debug"
+	"net"
 	"sync"
 )
 
@@ -28,9 +28,15 @@ func reader(in io.Reader, c chan WrappedMessage) {
 			return
 		}
 
+		if netError, ok := err.(*net.OpError); ok {
+			log.Printf("Network error: Op=%s, Net=%s, Source=%s, Address=%s, Err=%s",
+				netError.Op, netError.Net, netError.Source.String(),
+				netError.Addr.String(), netError.Err.Error())
+			return
+		}
+
 		if err != nil {
 			log.Printf("Can't decode stream: %#v: %s", err, err.Error())
-			debug.PrintStack()
 			return
 		}
 		c <- wrapper
@@ -40,15 +46,19 @@ func reader(in io.Reader, c chan WrappedMessage) {
 func writer(out io.Writer, c chan WrappedMessage) {
 	encoder := gob.NewEncoder(out)
 	for message := range c {
-		encoder.Encode(message)
+		err := encoder.Encode(message)
+		if err != nil {
+			log.Printf("Error while writing: %#v: %s", err, err.Error())
+			// TODO: Bail early?
+		}
 	}
 }
 
 func (c *WrappedMessageConnector) Init() {
 	pc := c
 	c.once.Do(func() {
-		pc.inChannel = make(chan WrappedMessage)
-		pc.outChannel = make(chan WrappedMessage)
+		pc.inChannel = make(chan WrappedMessage, 1)
+		pc.outChannel = make(chan WrappedMessage, 1)
 		go reader(pc.in, pc.inChannel)
 		go writer(pc.out, pc.outChannel)
 	})
