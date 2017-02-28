@@ -53,6 +53,8 @@ func (c *WrappedMessageConnector) Init() {
 }
 
 func (c WrappedMessageConnector) Receive() (interface{}, error) {
+	// Note that if the |c.inChannel| is closed, then the channel returns
+	// the zero value for WrappedMessage.
 	return UnwrapMessage(<-c.inChannel)
 }
 

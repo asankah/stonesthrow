@@ -78,5 +78,5 @@ func UnwrapMessage(wrapper WrappedMessage) (interface{}, error) {
 	case wrapper.ProcessList != nil:
 		return wrapper.ProcessList, nil
 	}
-	return nil, InvalidWrappedMessageTypeError
+	return nil, nil
 }

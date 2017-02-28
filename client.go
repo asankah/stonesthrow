@@ -20,7 +20,7 @@ func runClientWithStream(
 
 	for {
 		response, err := wrappedConn.Receive()
-		if err == io.EOF {
+		if err == io.EOF || response == nil {
 			return nil
 		}
 		if err != nil {
