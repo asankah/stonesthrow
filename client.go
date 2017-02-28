@@ -20,6 +20,7 @@ func runClientWithStream(
 	wrappedConn.Send(request)
 
 	for {
+
 		response, err := wrappedConn.Receive()
 		if err == io.EOF || response == nil {
 			return nil
@@ -117,8 +118,10 @@ func RunPassthroughClient(clientConfig, serverConfig Config) error {
 	quit = make(chan int)
 
 	go func() {
+		// This won't stop utnil os.Stdin is closed, which would happen
+		// after this process dies. Hence we are not going to wait for
+		// this call to complete.
 		io.Copy(conn, os.Stdin)
-		quit <- 0
 	}()
 
 	go func() {
@@ -126,7 +129,6 @@ func RunPassthroughClient(clientConfig, serverConfig Config) error {
 		quit <- 0
 	}()
 
-	<-quit
 	<-quit
 	return nil
 }

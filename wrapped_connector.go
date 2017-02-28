@@ -85,5 +85,5 @@ func (c WrappedMessageConnector) Send(message interface{}) error {
 
 func (c WrappedMessageConnector) Close() {
 	close(c.outChannel)
-	<- c.quitChannel
+	<-c.quitChannel
 }
