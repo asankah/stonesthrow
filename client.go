@@ -16,6 +16,7 @@ func runClientWithStream(
 
 	wrappedConn := &WrappedMessageConnector{in: reader, out: writer}
 	wrappedConn.Init()
+	defer wrappedConn.Close()
 	wrappedConn.Send(request)
 
 	for {
@@ -83,6 +84,8 @@ func (l localStaticConnection) Send(message interface{}) error {
 	}
 	return nil
 }
+
+func (l localStaticConnection) Close() {}
 
 func runLocallyWithoutServer(serverConfig Config, request RequestMessage, handler chan interface{}) error {
 	connection := localStaticConnection{ResponseSink: handler}

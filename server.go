@@ -198,6 +198,7 @@ type Server struct {
 func (s *Server) runSessionWithConnection(c io.ReadWriter, quitChannel chan error) {
 	wrappedConn := &WrappedMessageConnector{in: c, out: c}
 	wrappedConn.Init()
+	defer wrappedConn.Close()
 	channel := Channel{conn: wrappedConn}
 
 	blob, err := channel.Receive()
@@ -249,9 +250,9 @@ func (s *Server) runSessionWithConnection(c io.ReadWriter, quitChannel chan erro
 
 	log.Printf("Dispatching request %s", req.Command)
 	DispatchRequest(sessionInfo.Session, *req)
+	log.Printf("Done with request %s", req.Command)
 
 	s.sessionTracker.RemoveSession(&sessionInfo)
-	return
 }
 
 func (s *Server) Quit() {
