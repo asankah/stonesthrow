@@ -14,7 +14,8 @@ func runClientWithStream(
 	reader io.Reader,
 	writer io.Writer) error {
 
-	jsconn := jsonConnection{in: reader, out: writer}
+	jsconn := &jsonConnection{in: reader, out: writer}
+	jsconn.Init()
 	jsconn.Send(request)
 
 	for {

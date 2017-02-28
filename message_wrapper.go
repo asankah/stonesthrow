@@ -1,9 +1,5 @@
 package stonesthrow
 
-import (
-	"log"
-)
-
 type WrappedMessage struct {
 	Output       *TerminalOutputMessage `json:"output,omitempty"`
 	Info         *InfoMessage           `json:"info,omitempty"`
@@ -15,7 +11,7 @@ type WrappedMessage struct {
 	JobList      *JobListMessage        `json:"jobs,omitempty"`
 }
 
-func WrapMessage(message interface{}) WrappedMessage {
+func WrapMessage(message interface{}) (WrappedMessage, error) {
 	var wrapper WrappedMessage
 	switch t := message.(type) {
 	case TerminalOutputMessage:
@@ -43,10 +39,10 @@ func WrapMessage(message interface{}) WrappedMessage {
 		wrapper.JobList = &t
 
 	default:
-		log.Fatalf("Unexpected message type")
+		return wrapper, InvalidMessageType
 	}
 
-	return wrapper
+	return wrapper, nil
 }
 
 func UnwrapMessage(wrapper WrappedMessage) (interface{}, error) {

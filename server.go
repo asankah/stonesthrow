@@ -95,7 +95,7 @@ func (j *SessionTracker) GetSession(id int) *SessionInfo {
 	j.mut.Lock()
 	s, _ := j.Sessions[id]
 	j.mut.Unlock()
-	return s 
+	return s
 }
 
 func (j *SessionTracker) GetSessionProcessAdder(s *SessionInfo) ProcessAdder {
@@ -181,22 +181,23 @@ func (j *SessionTracker) KillRunningProcesses() ProcessListMessage {
 
 			proc.Process.Kill()
 			processList.Processes = append(processList.Processes, Process{
-				Command: proc.Command,
+				Command:   proc.Command,
 				StartTime: proc.StartTime,
-				Running: proc.Running})
+				Running:   proc.Running})
 		}
 	}
 	return processList
 }
 
 type Server struct {
-	config     Config
-	quitSignal chan error
+	config         Config
+	quitSignal     chan error
 	sessionTracker SessionTracker
 }
 
-func (s *Server) createSession(c io.ReadWriter, quitChannel chan error) {
+func (s *Server) runSessionWithConnection(c io.ReadWriter, quitChannel chan error) {
 	jsConn := &jsonConnection{in: c, out: c}
+	jsConn.Init()
 	channel := Channel{conn: jsConn}
 
 	blob, err := channel.Receive()
@@ -237,9 +238,9 @@ func (s *Server) createSession(c io.ReadWriter, quitChannel chan error) {
 	}
 
 	sessionInfo := SessionInfo{
-		Request:        *req,
-		StartTime:      time.Now(),
-		Running:        true}
+		Request:   *req,
+		StartTime: time.Now(),
+		Running:   true}
 
 	s.sessionTracker.AddSession(&sessionInfo)
 
@@ -317,7 +318,7 @@ The ID of the job should be specified as the only argument. Any new processes st
 		case conn = <-connections:
 			conn := conn
 			go func() {
-				s.createSession(conn, s.quitSignal)
+				s.runSessionWithConnection(conn, s.quitSignal)
 				conn.Close()
 			}()
 
