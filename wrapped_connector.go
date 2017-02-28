@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"io"
 	"log"
+	"runtime/debug"
 	"sync"
 )
 
@@ -29,6 +30,7 @@ func reader(in io.Reader, c chan WrappedMessage) {
 
 		if err != nil {
 			log.Printf("Can't decode stream: %#v: %s", err, err.Error())
+			debug.PrintStack()
 			return
 		}
 		c <- wrapper
