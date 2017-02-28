@@ -1,7 +1,7 @@
 package stonesthrow
 
 import (
-	"encoding/json"
+	"encoding/gob"
 	"io"
 	"log"
 	"sync"
@@ -17,7 +17,7 @@ type jsonConnection struct {
 }
 
 func reader(in io.Reader, c chan WrappedMessage) {
-	decoder := json.NewDecoder(in)
+	decoder := gob.NewDecoder(in)
 	defer close(c)
 	for {
 		var wrapper WrappedMessage
@@ -36,7 +36,7 @@ func reader(in io.Reader, c chan WrappedMessage) {
 }
 
 func writer(out io.Writer, c chan WrappedMessage) {
-	encoder := json.NewEncoder(out)
+	encoder := gob.NewEncoder(out)
 	for message := range c {
 		encoder.Encode(message)
 	}

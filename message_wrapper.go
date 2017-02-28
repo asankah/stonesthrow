@@ -9,6 +9,7 @@ type WrappedMessage struct {
 	CommandList  *CommandListMessage    `json:"ls,omitempty"`
 	Request      *RequestMessage        `json:"req,omitempty"`
 	JobList      *JobListMessage        `json:"jobs,omitempty"`
+	ProcessList  *ProcessListMessage    `json:"ps,omitempty"`
 }
 
 func WrapMessage(message interface{}) (WrappedMessage, error) {
@@ -38,8 +39,11 @@ func WrapMessage(message interface{}) (WrappedMessage, error) {
 	case JobListMessage:
 		wrapper.JobList = &t
 
+	case ProcessListMessage:
+		wrapper.ProcessList = &t
+
 	default:
-		return wrapper, InvalidMessageType
+		return wrapper, InvalidMessageTypeError
 	}
 
 	return wrapper, nil
@@ -70,6 +74,9 @@ func UnwrapMessage(wrapper WrappedMessage) (interface{}, error) {
 
 	case wrapper.Request != nil:
 		return wrapper.Request, nil
+
+	case wrapper.ProcessList != nil:
+		return wrapper.ProcessList, nil
 	}
-	return nil, InvalidMessageType
+	return nil, InvalidWrappedMessageTypeError
 }
