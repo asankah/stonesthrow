@@ -28,7 +28,7 @@ func reader(in io.Reader, c chan WrappedMessage) {
 		}
 
 		if err != nil {
-			log.Printf("Can't decode stream: %#v", err)
+			log.Printf("Can't decode stream: %#v: %s", err, err.Error())
 			return
 		}
 		c <- wrapper
