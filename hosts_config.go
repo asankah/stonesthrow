@@ -81,7 +81,7 @@ func (h *HostsConfig) ReadFrom(filename string) error {
 func (h *HostsConfig) HostForPlatform(platform string, localhost string) *HostConfig {
 	config, ok := h.Hosts[localhost]
 	if ok && config.SupportsPlatform(platform) {
-			return config
+		return config
 	}
 
 	for _, config = range h.Hosts {

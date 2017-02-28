@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-type jsonConnection struct {
+type WrappedMessageConnector struct {
 	in  io.Reader
 	out io.Writer
 
@@ -42,7 +42,7 @@ func writer(out io.Writer, c chan WrappedMessage) {
 	}
 }
 
-func (c *jsonConnection) Init() {
+func (c *WrappedMessageConnector) Init() {
 	pc := c
 	c.once.Do(func() {
 		pc.inChannel = make(chan WrappedMessage)
@@ -52,11 +52,11 @@ func (c *jsonConnection) Init() {
 	})
 }
 
-func (c jsonConnection) Receive() (interface{}, error) {
+func (c WrappedMessageConnector) Receive() (interface{}, error) {
 	return UnwrapMessage(<-c.inChannel)
 }
 
-func (c jsonConnection) Send(message interface{}) error {
+func (c WrappedMessageConnector) Send(message interface{}) error {
 	wrapper, err := WrapMessage(message)
 	if err != nil {
 		return err

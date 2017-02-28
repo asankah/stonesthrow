@@ -196,9 +196,9 @@ type Server struct {
 }
 
 func (s *Server) runSessionWithConnection(c io.ReadWriter, quitChannel chan error) {
-	jsConn := &jsonConnection{in: c, out: c}
-	jsConn.Init()
-	channel := Channel{conn: jsConn}
+	wrappedConn := &WrappedMessageConnector{in: c, out: c}
+	wrappedConn.Init()
+	channel := Channel{conn: wrappedConn}
 
 	blob, err := channel.Receive()
 
@@ -230,7 +230,7 @@ func (s *Server) runSessionWithConnection(c io.ReadWriter, quitChannel chan erro
 			channel.Error(err.Error())
 			return
 		}
-		err = s.sessionTracker.SwapConnectionForSession(sessionId, jsConn)
+		err = s.sessionTracker.SwapConnectionForSession(sessionId, wrappedConn)
 		if err != nil {
 			channel.Error(err.Error())
 		}

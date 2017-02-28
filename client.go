@@ -14,12 +14,12 @@ func runClientWithStream(
 	reader io.Reader,
 	writer io.Writer) error {
 
-	jsconn := &jsonConnection{in: reader, out: writer}
-	jsconn.Init()
-	jsconn.Send(request)
+	wrappedConn := &WrappedMessageConnector{in: reader, out: writer}
+	wrappedConn.Init()
+	wrappedConn.Send(request)
 
 	for {
-		response, err := jsconn.Receive()
+		response, err := wrappedConn.Receive()
 		if err == io.EOF {
 			return nil
 		}
