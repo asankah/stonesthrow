@@ -7,11 +7,17 @@ import (
 	"strings"
 )
 
+type RepositoryGitConfig struct {
+	BranchProperties []string    `json:"branch_properties,omitempty"`
+	Remote           string      `json:"remote,omitempty"`
+	RemoteHostname   string      `json:"hostname,omitempty"`
+	RemoteHost       *HostConfig `json:"-"`
+}
+
 type RepositoryConfig struct {
-	SourcePath     string                     `json:"src"`
-	GitRemote      string                     `json:"git_remote,omitempty"`
-	MasterHostname string                     `json:"git_hostname"`
-	Platforms      map[string]*PlatformConfig `json:"platforms"`
+	SourcePath string                     `json:"src"`
+	Platforms  map[string]*PlatformConfig `json:"platforms"`
+	GitConfig  RepositoryGitConfig        `json:"git"`
 
 	Name string      `json:"-"`
 	Host *HostConfig `json:"-"`
@@ -131,10 +137,11 @@ func (r *RepositoryConfig) GitCreateBuilderHead(e Executor) (string, error) {
 }
 
 func (r *RepositoryConfig) GitPush(e Executor, branch string) error {
-	if r.GitRemote == "" {
+	// TODO(asanka): Apply branch properties.
+	if r.GitConfig.Remote == "" {
 		return NoUpstreamError
 	}
-	output, err := r.RunHere(e, "git", "push", r.GitRemote, "--porcelain", "--thin",
+	output, err := r.RunHere(e, "git", "push", r.GitConfig.Remote, "--porcelain", "--thin",
 		"--force", branch)
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -159,19 +166,19 @@ func (r *RepositoryConfig) GitPushCurrentBranch(e Executor) error {
 }
 
 func (r *RepositoryConfig) GitPullRemote(e Executor) error {
-	if r.GitRemote == "" {
+	if r.GitConfig.Remote == "" {
 		return NoUpstreamError
 	}
-	return r.CheckHere(e, "git", "fetch", r.GitRemote, "--progress",
+	return r.CheckHere(e, "git", "fetch", r.GitConfig.Remote, "--progress",
 		"+BUILDER_HEAD:BUILDER_HEAD",
 		"refs/remotes/origin/master:refs/heads/upstream-origin")
 }
 
 func (r *RepositoryConfig) GitFetch(e Executor, branch string) error {
-	if r.GitRemote == "" {
+	if r.GitConfig.Remote == "" {
 		return NoUpstreamError
 	}
-	return r.CheckHere(e, "git", "fetch", r.GitRemote, fmt.Sprintf("+%s:%s", branch, branch),
+	return r.CheckHere(e, "git", "fetch", r.GitConfig.Remote, fmt.Sprintf("+%s:%s", branch, branch),
 		"refs/remotes/origin/master:refs/heads/upstream-origin")
 }
 

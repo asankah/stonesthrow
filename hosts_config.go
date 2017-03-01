@@ -33,6 +33,14 @@ func (h *HostsConfig) Normalize() error {
 		}
 
 		for _, repo := range hostConfig.Repositories {
+			if repo.GitConfig.RemoteHostname != "" {
+				var ok bool
+				repo.GitConfig.RemoteHost, ok = h.Hosts[repo.GitConfig.RemoteHostname]
+				if !ok {
+					return fmt.Errorf("%s -> %s: Git remote %s can't be resolved",
+						hostConfig.Name, repo.Name, repo.GitConfig.RemoteHostname)
+				}
+			}
 			for _, platform := range repo.Platforms {
 				for hostName, ep := range platform.Endpoints {
 					var ok bool

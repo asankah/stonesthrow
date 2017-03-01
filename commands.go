@@ -1,78 +1,130 @@
 package stonesthrow
 
 import (
+	"context"
+	"flag"
+	"github.com/google/subcommands"
 	"sync"
 )
 
-type RequestHandler func(*Session, RequestMessage) error
+type FlagSetter func(*flag.FlagSet)
+type RequestHandler func(*Session, RequestMessage, *flag.FlagSet) error
 
-type Handler struct {
-	doc     string
-	handler RequestHandler
-	isTest  bool
+type CommandHandler struct {
+	name       string
+	synopsis   string
+	usage      string
+	flagSetter FlagSetter
+	handler    RequestHandler
 }
 
-var handlerMap = map[string]Handler{
-	"branch": {
-		doc: `List local branches.`,
-		handler: func(s *Session, req RequestMessage) error {
+func (h CommandHandler) Name() string {
+	return h.name
+}
+
+func (h CommandHandler) Synposis() string {
+	return h.synopsis
+}
+
+func (h CommandHandler) Usage() string {
+	return h.usage
+}
+
+func (h CommandHandler) SetFlags(f *flag.FlagSet) {
+	if h.flagSetter != nil {
+		h.flagSetter(f)
+	}
+}
+
+func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	session := args[0].(*Session)
+	request := args[1].(RequestMessage)
+
+	err := h.handler(s, req, f)
+	if err == InvalidArgumentError {
+		return subcommands.ExitUsageError
+	}
+	if err != nil {
+		return subcommands.ExitFailure
+	}
+	return subcommands.ExitSuccess
+}
+
+var allHandlers = []CommandHandler{
+	CommandHandler{
+		"branch",
+		`List local branches.`, "", nil,
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.config.Repository.CheckHere(
 				s, "git", "branch", "--list", "-vvv")
-		},
-		isTest: false},
+		}},
 
-	"build": {
-		doc: `Build specified targets.`,
-		handler: func(s *Session, req RequestMessage) error {
+	CommandHandler{
+		"build",
+		`Build specified targets.`, "", nil,
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
 			err := s.SyncWorkdir(req.Revision)
 			if err != nil {
 				return err
 			}
 			return s.BuildTargets(req.Arguments...)
+		}},
+
+	CommandHandler{
+		"clean",
+		`'clean build' cleans the build directory, while 'clean source' cleans the source directory.`, "",
+		func(f *flag.FlagSet) {
+			f.Bool("out", false, "Clean the output directory.")
+			f.Bool("src", false, "Clean the source directory.")
+			f.Bool("force", false,
+				"Actually do the cleaning. Without this flag, the command merely lists which files would be affected.")
 		},
-		isTest: false},
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
+			outValue := f.Lookup("out")
+			srcValue := f.Lookup("src")
+			forceValue := f.Lookup("force")
 
-	"clean": {
-		`'clean build' cleans the build directory, while 'clean source' cleans the source directory.`,
-		func(s *Session, req RequestMessage) error {
-			switch {
-			case len(req.Arguments) >= 1 && req.Arguments[0] == "build":
+			if outValue.Value.String() == "true" {
 				return s.CleanTargets(req.Arguments...)
-
-			case len(req.Arguments) == 1 && req.Arguments[0] == "source":
-				s.channel.Info("Specify 'clean source force' to remove files not recognized by git.")
-				return s.config.Repository.CheckHere(s, "git", "clean", "-n")
-
-			case len(req.Arguments) == 2 && req.Arguments[0] == "source" && req.Arguments[1] == "force":
-				return s.config.Repository.CheckHere(s, "git", "clean", "-f")
-
-			default:
-				return InvalidArgumentError
 			}
-		}, false},
 
-	"clobber": {
-		`Clobber the build directory.`,
-		func(s *Session, req RequestMessage) error {
-			return s.Clobber(len(req.Arguments) == 1 && req.Arguments[0] == "force")
-		}, false},
+			if srcValue.Value.String() == "true" {
+				if forceValue.Value.String() == "true" {
+					return s.config.Repository.CheckHere(s, "git", "clean", "-f")
+				} else {
+					s.channel.Info("Specify 'clean source force' to remove files not recognized by git.")
+					return s.config.Repository.CheckHere(s, "git", "clean", "-n")
+				}
+			}
+			return InvalidArgumentError
+		}},
 
-	"ping": {
-		`Diagnostic. Responds with a pong.`,
-		func(s *Session, req RequestMessage) error {
+	CommandHandler{
+		"clobber",
+		`Clobber the build directory.`, "",
+		func(f *flag.FlagSet) {
+			f.Bool("force", false, "Actually clobber. The command doesn't do anything if this flag is not specified.")
+		},
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
+			return s.Clobber(f.Lookup("force").Value.String() == "true")
+		}},
+
+	CommandHandler{"ping",
+		`Diagnostic. Responds with a pong.`, "", nil,
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
 			s.channel.Info("Pong")
 			return nil
-		}, false},
+		}},
 
-	"prepare": {
-		`Prepare build directory. Runs 'mb gen'.`,
-		func(s *Session, req RequestMessage) error {
+	CommandHandler{"prepare",
+		`Prepare build directory. Runs 'mb gen'.`, "", nil,
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.PrepareBuild()
-		}, false},
+		}},
 
-	"pull": {
-		`Pull a specific branch from upstream.`,
-		func(s *Session, req RequestMessage) error {
+	CommandHandler{"pull",
+		`Pull a specific branch from upstream.`, "", nil,
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
 			if len(req.Arguments) != 1 {
 				s.channel.Error("Need to specify branch")
 				return InvalidArgumentError
@@ -82,31 +134,32 @@ var handlerMap = map[string]Handler{
 				return err
 			}
 			return s.config.Repository.GitCheckoutRevision(s, req.Arguments[0])
-		}, false},
+		}},
 
-	"push": {
-		`Push the current branch to upstream.`,
-		func(s *Session, req RequestMessage) error {
+	CommandHandler{"push",
+		`Push the current branch to upstream.`, "", nil,
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.PushCurrentBranch()
-		}, false},
+		}},
 
-	"status": {
-		`Run 'git status'.`,
-		func(s *Session, req RequestMessage) error {
+	CommandHandler{"status",
+		`Run 'git status'.`, "", nil,
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.GitStatus()
-		}, false},
+		}},
 
-	"sync": {
-		`Run 'gclient sync'.`,
-		func(s *Session, req RequestMessage) error {
+	CommandHandler{"sync",
+		`Run 'gclient sync'.`, "", nil,
+		func(s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.RunGclientSync()
-		}, false}}
+		}}}
 
 var initOnce sync.Once
 
 func CommandNeedsRevision(command string) bool {
 	switch command {
-	case "status", "prepare", "ping", "clobber", "help", "quit", "list", "jobs", "killall", "join", "push", "clean", "sync":
+	case "status", "prepare", "ping", "clobber", "help", "quit",
+		"list", "jobs", "killall", "join", "push", "clean", "sync":
 		return false
 
 	default:
@@ -115,11 +168,21 @@ func CommandNeedsRevision(command string) bool {
 }
 
 func AddHandler(command string, doc string, handler RequestHandler) {
-	handlerMap[command] = Handler{doc, handler, false}
+	allHandlers = append(allHandlers, CommandHandler{command, doc, "", nil, handler})
 }
 
 func AddTestHandler(command string, handler RequestHandler) {
-	handlerMap[command] = Handler{"", handler, true}
+	allHandlers = append(allHandlers, CommandHandler{command, "Runs the specific test target.",
+		`Use 'list tests' to retrieve a list of known test targets.
+
+Arguments are as follows:
+'all'           : Run all tests in suite.
+'withoutput'    : Adds --test-launcher-print-test-stdio=always.
+any option      : Passed along to test runner.
+any other token : Treated as a test filter and passed along to the test runner using --gtest_filter.
+
+E.g.: 'net_unittests foo*' is expanded into 'net_unttests --gtest_filter=foo*'
+`, nil, handler})
 }
 
 func handleHelp(s *Session, req RequestMessage) error {
@@ -135,7 +198,7 @@ func handleHelp(s *Session, req RequestMessage) error {
 	commandList.Repositories["chrome"] = chromeRepo
 
 	commandList.Commands = make(map[string]Command)
-	for command, handler := range handlerMap {
+	for command, handler := range allHandlers {
 		if handler.isTest {
 			continue
 		}
@@ -209,7 +272,7 @@ func addDynamicHandlers(s *Session) {
 func DispatchRequest(s *Session, req RequestMessage) {
 	initOnce.Do(func() { addDynamicHandlers(s) })
 
-	handler, ok := handlerMap[req.Command]
+	handler, ok := allHandlers[req.Command]
 	if !ok {
 		s.channel.Error("Invalid method")
 		return
