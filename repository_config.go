@@ -2,6 +2,7 @@ package stonesthrow
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -58,20 +59,20 @@ func (r *RepositoryConfig) RelativePath(path string) string {
 	return filepath.Join(r.SourcePath, path)
 }
 
-func (r *RepositoryConfig) RunHere(e Executor, command ...string) (string, error) {
-	return e.RunCommand(r.SourcePath, command...)
+func (r *RepositoryConfig) RunHere(ctx context.Context, e Executor, command ...string) (string, error) {
+	return e.RunCommand(ctx, r.SourcePath, command...)
 }
 
-func (r *RepositoryConfig) CheckHere(e Executor, command ...string) error {
-	return e.CheckCommand(r.SourcePath, command...)
+func (r *RepositoryConfig) CheckHere(ctx context.Context, e Executor, command ...string) error {
+	return e.CheckCommand(ctx, r.SourcePath, command...)
 }
 
-func (r *RepositoryConfig) GitRevision(e Executor, name string) (string, error) {
-	return r.RunHere(e, "git", "rev-parse", name)
+func (r *RepositoryConfig) GitRevision(ctx context.Context, e Executor, name string) (string, error) {
+	return r.RunHere(ctx, e, "git", "rev-parse", name)
 }
 
-func (r *RepositoryConfig) GitCreateWorkTree(e Executor) (string, error) {
-	status, err := r.GitStatus(e)
+func (r *RepositoryConfig) GitCreateWorkTree(ctx context.Context, e Executor) (string, error) {
+	status, err := r.GitStatus(ctx, e)
 	if err != nil {
 		return "", err
 	}
@@ -81,18 +82,18 @@ func (r *RepositoryConfig) GitCreateWorkTree(e Executor) (string, error) {
 	}
 
 	if !status.HasModified {
-		return r.GitRevision(e, "HEAD^{tree}")
+		return r.GitRevision(ctx, e, "HEAD^{tree}")
 	}
 
-	_, err = r.RunHere(e, "git", "add", "-u")
+	_, err = r.RunHere(ctx, e, "git", "add", "-u")
 	if err != nil {
 		return "", err
 	}
-	return r.RunHere(e, "git", "write-tree")
+	return r.RunHere(ctx, e, "git", "write-tree")
 }
 
-func (r *RepositoryConfig) GitCreateBuilderHead(e Executor) (string, error) {
-	status, err := r.GitStatus(e)
+func (r *RepositoryConfig) GitCreateBuilderHead(ctx context.Context, e Executor) (string, error) {
+	status, err := r.GitStatus(ctx, e)
 	if err != nil {
 		return "", err
 	}
@@ -101,47 +102,47 @@ func (r *RepositoryConfig) GitCreateBuilderHead(e Executor) (string, error) {
 	if len(status.ModifiedFiles) > 0 {
 		command := []string{"git", "update-index", "--"}
 		command = append(command, status.ModifiedFiles...)
-		_, err = r.RunHere(e, command...)
+		_, err = r.RunHere(ctx, e, command...)
 		if err != nil {
 			return "", err
 		}
 
-		tree, err = r.RunHere(e, "git", "write-tree")
+		tree, err = r.RunHere(ctx, e, "git", "write-tree")
 		if err != nil {
 			return "", err
 		}
 	} else {
-		tree, err = r.GitRevision(e, "HEAD^{tree}")
+		tree, err = r.GitRevision(ctx, e, "HEAD^{tree}")
 		if err != nil {
 			return "", err
 		}
 	}
 
-	builderTree, err := r.GitRevision(e, "BUILDER_HEAD^{tree}")
+	builderTree, err := r.GitRevision(ctx, e, "BUILDER_HEAD^{tree}")
 	if err != nil || builderTree != tree {
-		headCommit, err := r.GitRevision(e, "HEAD")
+		headCommit, err := r.GitRevision(ctx, e, "HEAD")
 		if err != nil {
 			return "", err
 		}
-		revision, err := r.RunHere(e, "git", "commit-tree", "-p", headCommit, "-m", "BUILDER_HEAD", tree)
+		revision, err := r.RunHere(ctx, e, "git", "commit-tree", "-p", headCommit, "-m", "BUILDER_HEAD", tree)
 		if err != nil {
 			return "", err
 		}
-		_, err = r.RunHere(e, "git", "update-ref", "refs/heads/BUILDER_HEAD", revision)
+		_, err = r.RunHere(ctx, e, "git", "update-ref", "refs/heads/BUILDER_HEAD", revision)
 		if err != nil {
 			return "", err
 		}
 		return revision, nil
 	}
-	return r.GitRevision(e, "BUILDER_HEAD")
+	return r.GitRevision(ctx, e, "BUILDER_HEAD")
 }
 
-func (r *RepositoryConfig) GitPush(e Executor, branch string) error {
+func (r *RepositoryConfig) GitPush(ctx context.Context, e Executor, branch string) error {
 	// TODO(asanka): Apply branch properties.
 	if r.GitConfig.Remote == "" {
 		return NoUpstreamError
 	}
-	output, err := r.RunHere(e, "git", "push", r.GitConfig.Remote, "--porcelain", "--thin",
+	output, err := r.RunHere(ctx, e, "git", "push", r.GitConfig.Remote, "--porcelain", "--thin",
 		"--force", branch)
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -157,54 +158,54 @@ func (r *RepositoryConfig) GitPush(e Executor, branch string) error {
 	return err
 }
 
-func (r *RepositoryConfig) GitPushRemote(e Executor) error {
-	return r.GitPush(e, "BUILDER_HEAD")
+func (r *RepositoryConfig) GitPushRemote(ctx context.Context, e Executor) error {
+	return r.GitPush(ctx, e, "BUILDER_HEAD")
 }
 
-func (r *RepositoryConfig) GitPushCurrentBranch(e Executor) error {
-	return r.GitPush(e, "HEAD")
+func (r *RepositoryConfig) GitPushCurrentBranch(ctx context.Context, e Executor) error {
+	return r.GitPush(ctx, e, "HEAD")
 }
 
-func (r *RepositoryConfig) GitPullRemote(e Executor) error {
+func (r *RepositoryConfig) GitPullRemote(ctx context.Context, e Executor) error {
 	if r.GitConfig.Remote == "" {
 		return NoUpstreamError
 	}
-	return r.CheckHere(e, "git", "fetch", r.GitConfig.Remote, "--progress",
+	return r.CheckHere(ctx, e, "git", "fetch", r.GitConfig.Remote, "--progress",
 		"+BUILDER_HEAD:BUILDER_HEAD",
 		"refs/remotes/origin/master:refs/heads/upstream-origin")
 }
 
-func (r *RepositoryConfig) GitFetch(e Executor, branch string) error {
+func (r *RepositoryConfig) GitFetch(ctx context.Context, e Executor, branch string) error {
 	if r.GitConfig.Remote == "" {
 		return NoUpstreamError
 	}
-	return r.CheckHere(e, "git", "fetch", r.GitConfig.Remote, fmt.Sprintf("+%s:%s", branch, branch),
+	return r.CheckHere(ctx, e, "git", "fetch", r.GitConfig.Remote, fmt.Sprintf("+%s:%s", branch, branch),
 		"refs/remotes/origin/master:refs/heads/upstream-origin")
 }
 
-func (r *RepositoryConfig) GitHashObject(e Executor, path string) (string, error) {
-	return r.RunHere(e, "git", "hash-object", path)
+func (r *RepositoryConfig) GitHashObject(ctx context.Context, e Executor, path string) (string, error) {
+	return r.RunHere(ctx, e, "git", "hash-object", path)
 }
 
-func (r *RepositoryConfig) GitCheckoutRevision(e Executor, targetRevision string) error {
-	currentWorkTree, err := r.GitCreateWorkTree(e)
+func (r *RepositoryConfig) GitCheckoutRevision(ctx context.Context, e Executor, targetRevision string) error {
+	currentWorkTree, err := r.GitCreateWorkTree(ctx, e)
 	if err != nil {
 		return err
 	}
-	targetWorkTree, err := r.GitRevision(e, fmt.Sprintf("%s^{tree}", targetRevision))
+	targetWorkTree, err := r.GitRevision(ctx, e, fmt.Sprintf("%s^{tree}", targetRevision))
 	if err == nil && currentWorkTree == targetWorkTree {
 		return nil
 	}
 
 	if err != nil {
-		err = r.GitPullRemote(e)
+		err = r.GitPullRemote(ctx, e)
 	}
 
 	if err != nil {
 		return err
 	}
 
-	err = r.CheckHere(e, "git", "checkout", "--force", "--quiet", "--no-progress", targetRevision)
+	err = r.CheckHere(ctx, e, "git", "checkout", "--force", "--quiet", "--no-progress", targetRevision)
 	if err != nil {
 		return err
 	}
@@ -218,9 +219,9 @@ type GitStatusResult struct {
 	ModifiedFiles []string
 }
 
-func (r *RepositoryConfig) GitStatus(e Executor) (GitStatusResult, error) {
+func (r *RepositoryConfig) GitStatus(ctx context.Context, e Executor) (GitStatusResult, error) {
 	var result GitStatusResult
-	gitStatus, err := r.RunHere(e, "git", "status", "--porcelain=2",
+	gitStatus, err := r.RunHere(ctx, e, "git", "status", "--porcelain=2",
 		"--untracked-files=no", "--ignore-submodules")
 	if err != nil {
 		return result, err

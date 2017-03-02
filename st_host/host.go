@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"github.com/asankah/stonesthrow"
@@ -52,7 +53,7 @@ func main() {
 	reload := false
 
 	stonesthrow.AddHandler("reload", "Reload and rebuild the server library.",
-		func(s *stonesthrow.Session, req stonesthrow.RequestMessage) error {
+		func(ctx context.Context, s *stonesthrow.Session, req stonesthrow.RequestMessage, _ *flag.FlagSet) error {
 			server.Quit()
 			reload = true
 			return nil

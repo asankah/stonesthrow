@@ -1,6 +1,8 @@
 package stonesthrow
 
 import (
+	"context"
+	"flag"
 	"io"
 	"log"
 	"net"
@@ -20,6 +22,7 @@ type SessionInfo struct {
 	Running        bool
 	CompletionCond *sync.Cond
 	ProcessMap     map[int]*ProcessRecord
+	CancelFunc     context.CancelFunc
 }
 
 type ProcessAdder interface {
@@ -191,11 +194,12 @@ func (j *SessionTracker) KillRunningProcesses() ProcessListMessage {
 
 type Server struct {
 	config         Config
-	quitSignal     chan error
+	cancelFunc     context.CancelFunc
 	sessionTracker SessionTracker
 }
 
-func (s *Server) runSessionWithConnection(c io.ReadWriter, quitChannel chan error) {
+func (s *Server) runSessionWithConnection(ctx context.Context, c io.ReadWriter, quitter context.CancelFunc) {
+	ctx, cancelFunc := context.WithCancel(ctx)
 	wrappedConn := &WrappedMessageConnector{in: c, out: c}
 	wrappedConn.Init()
 	defer wrappedConn.Close()
@@ -221,7 +225,7 @@ func (s *Server) runSessionWithConnection(c io.ReadWriter, quitChannel chan erro
 
 	if req.Command == "quit" {
 		channel.Info("Quitting")
-		quitChannel <- nil
+		quitter()
 		return
 	}
 
@@ -239,9 +243,10 @@ func (s *Server) runSessionWithConnection(c io.ReadWriter, quitChannel chan erro
 	}
 
 	sessionInfo := SessionInfo{
-		Request:   *req,
-		StartTime: time.Now(),
-		Running:   true}
+		Request:    *req,
+		StartTime:  time.Now(),
+		Running:    true,
+		CancelFunc: cancelFunc}
 
 	s.sessionTracker.AddSession(&sessionInfo)
 
@@ -249,14 +254,14 @@ func (s *Server) runSessionWithConnection(c io.ReadWriter, quitChannel chan erro
 		processAdder: s.sessionTracker.GetSessionProcessAdder(&sessionInfo)}
 
 	log.Printf("Dispatching request %s", req.Command)
-	DispatchRequest(sessionInfo.Session, *req)
+	DispatchRequest(ctx, sessionInfo.Session, *req)
 	log.Printf("Done with request %s", req.Command)
 
 	s.sessionTracker.RemoveSession(&sessionInfo)
 }
 
 func (s *Server) Quit() {
-	s.quitSignal <- nil
+	s.cancelFunc()
 }
 
 func (s *Server) listJobsHandler(session *Session, req RequestMessage) {
@@ -268,16 +273,20 @@ func (s *Server) killProcessHandler(session *Session, req RequestMessage) {
 }
 
 func (s *Server) Run(config Config) error {
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	s.cancelFunc = cancelFunc
 	nextSessionId = 1
 	s.sessionTracker.Init()
-	AddHandler("jobs", "List running jobs", func(sess *Session, req RequestMessage) error {
-		s.listJobsHandler(sess, req)
-		return nil
-	})
-	AddHandler("killall", "Kill all child processes", func(sess *Session, req RequestMessage) error {
-		s.killProcessHandler(sess, req)
-		return nil
-	})
+	AddHandler("jobs", "List running jobs",
+		func(_ context.Context, sess *Session, req RequestMessage, _ *flag.FlagSet) error {
+			s.listJobsHandler(sess, req)
+			return nil
+		})
+	AddHandler("killall", "Kill all child processes",
+		func(_ context.Context, sess *Session, req RequestMessage, _ *flag.FlagSet) error {
+			s.killProcessHandler(sess, req)
+			return nil
+		})
 	AddHandler("quit", "Quit server", nil)
 	AddHandler("join", `Join a running job.
 
@@ -291,7 +300,8 @@ The ID of the job should be specified as the only argument. Any new processes st
 		return EndpointNotFoundError
 	}
 
-	log.Printf("Starting server for %s at %s on %s. This is PID %d", config.PlatformName, ep.Address, ep.HostName, os.Getpid())
+	log.Printf("Starting server for %s at %s on %s. This is PID %d", config.PlatformName,
+		ep.Address, ep.HostName, os.Getpid())
 	listener, err := net.Listen(ep.Network, ep.Address)
 	if err != nil {
 		return err
@@ -300,13 +310,12 @@ The ID of the job should be specified as the only argument. Any new processes st
 	defer listener.Close()
 
 	connections := make(chan net.Conn)
-	s.quitSignal = make(chan error)
 
 	go func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				s.quitSignal <- err
+				cancelFunc()
 			}
 			connections <- conn
 		}
@@ -314,17 +323,16 @@ The ID of the job should be specified as the only argument. Any new processes st
 
 	for {
 		var conn net.Conn
-		var err error
 		select {
 		case conn = <-connections:
 			conn := conn
 			go func() {
-				s.runSessionWithConnection(conn, s.quitSignal)
+				s.runSessionWithConnection(ctx, conn, cancelFunc)
 				conn.Close()
 			}()
 
-		case err = <-s.quitSignal:
-			return err
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 }

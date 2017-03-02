@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"github.com/asankah/stonesthrow"
@@ -94,8 +95,9 @@ func main() {
 	req.Command = arguments[0]
 	req.Arguments = arguments[1:]
 	req.Repository = *repository
-	if stonesthrow.CommandNeedsRevision(req.Command) {
-		req.Revision, err = clientConfig.Repository.GitCreateBuilderHead(executor)
+	commandHandler, ok := stonesthrow.GetHandlerForCommand(req.Command)
+	if !ok || commandHandler.NeedsRevision() {
+		req.Revision, err = clientConfig.Repository.GitCreateBuilderHead(context.Background(), executor)
 	}
 	if err != nil {
 		log.Fatal(err.Error())

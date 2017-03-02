@@ -29,8 +29,9 @@ type EndCommandMessage struct {
 }
 
 type Command struct {
-	Aliases []string `json:"aliases,omitempty"`
-	Doc     string   `json:"doc,omitempty"`
+	Aliases  []string `json:"aliases,omitempty"`
+	Synopsis string   `json:"synposis,omitempty"`
+	Usage    string   `json:"usage,omitempty"`
 }
 
 type Repository struct {

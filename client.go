@@ -1,6 +1,7 @@
 package stonesthrow
 
 import (
+	"context"
 	"io"
 	"net"
 	"os"
@@ -92,7 +93,7 @@ func runLocallyWithoutServer(serverConfig Config, request RequestMessage, handle
 	connection := localStaticConnection{ResponseSink: handler}
 	channel := Channel{conn: connection}
 	session := Session{config: serverConfig, channel: channel, processAdder: nil}
-	DispatchRequest(&session, request)
+	DispatchRequest(context.Background(), &session, request)
 	return nil
 }
 
@@ -136,10 +137,14 @@ func RunPassthroughClient(clientConfig, serverConfig Config) error {
 func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, serverConfig Config,
 	request RequestMessage, handler chan interface{}) error {
 
-	// Passthrough requires that the server already have the correct BUILDER_HEAD.
-	err := clientConfig.Repository.GitPushRemote(e)
-	if err != nil {
-		return err
+	context := context.Background()
+	commandHandler, ok := GetHandlerForCommand(request.Command)
+	if !ok || commandHandler.needsRevision {
+		// Passthrough requires that the server already have the correct BUILDER_HEAD.
+		err := clientConfig.Repository.GitPushRemote(context, e)
+		if err != nil {
+			return err
+		}
 	}
 
 	if sshTarget.SshHostName == "" {
@@ -150,7 +155,7 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 		"--server", serverConfig.PlatformName,
 		"--repository", serverConfig.RepositoryName,
 		"--passthrough"}
-	cmd := exec.Command("ssh", sshCommand...)
+	cmd := exec.CommandContext(context, "ssh", sshCommand...)
 
 	writeEnd, err := cmd.StdinPipe()
 	if err != nil {

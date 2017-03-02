@@ -2,6 +2,7 @@ package stonesthrow
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -33,22 +34,22 @@ type Session struct {
 	processAdder ProcessAdder
 }
 
-func (s *Session) RunCommand(workdir string, command ...string) (string, error) {
-	return RunCommandWithWorkDir(workdir, command...)
+func (s *Session) RunCommand(ctx context.Context, workdir string, command ...string) (string, error) {
+	return RunCommandWithWorkDir(ctx, workdir, command...)
 }
 
-func (s *Session) CommandAtSourceDir(command ...string) error {
-	return s.config.Repository.CheckHere(s, command...)
+func (s *Session) CommandAtSourceDir(ctx context.Context, command ...string) error {
+	return s.config.Repository.CheckHere(ctx, s, command...)
 }
 
-func (s *Session) CheckCommand(workDir string, command ...string) error {
+func (s *Session) CheckCommand(ctx context.Context, workDir string, command ...string) error {
 	// Nothing to do?
 	if len(command) == 0 {
 		return EmptyCommandError
 	}
 
 	s.channel.BeginCommand(workDir, command, false)
-	cmd := exec.Command(command[0], command[1:]...)
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Env = nil // inherit
 	cmd.Dir = workDir
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -95,7 +96,7 @@ func (s *Session) CheckCommand(workDir string, command ...string) error {
 	return ExternalCommandFailedError
 }
 
-func (s *Session) runMB(command ...string) error {
+func (s *Session) runMB(ctx context.Context, command ...string) error {
 	if len(command) == 0 {
 		return InvalidArgumentError
 	}
@@ -108,7 +109,7 @@ func (s *Session) runMB(command ...string) error {
 		arguments = append(arguments, "--goma-dir", s.config.Host.GomaPath)
 	}
 	arguments = append(arguments, command[1:]...)
-	return s.CommandAtSourceDir(arguments...)
+	return s.CommandAtSourceDir(ctx, arguments...)
 }
 
 func ShortTargetNameFromGNLabel(label string) string {
@@ -131,12 +132,12 @@ func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
 		"browser_tests":        {}}, nil
 }
 
-func (s *Session) GetAllTargetsSlow(testOnly bool) (map[string]Command, error) {
+func (s *Session) GetAllTargetsSlow(ctx context.Context, testOnly bool) (map[string]Command, error) {
 	command := []string{"gn", "ls", s.config.GetBuildPath(), "--type=executable", "--as=label"}
 	if testOnly {
 		command = append(command, "--testonly=true")
 	}
-	allLabels, err := s.config.Repository.RunHere(s, command...)
+	allLabels, err := s.config.Repository.RunHere(ctx, s, command...)
 	if err != nil {
 		return nil, err
 	}
@@ -150,39 +151,39 @@ func (s *Session) GetAllTargetsSlow(testOnly bool) (map[string]Command, error) {
 	return targetMap, nil
 }
 
-func (s *Session) SyncWorkdir(targetHash string) error {
+func (s *Session) SyncWorkdir(ctx context.Context, targetHash string) error {
 	depsFile := s.config.GetSourcePath("DEPS")
-	oldDepsHash, _ := s.config.Repository.GitHashObject(s, depsFile)
-	err := s.config.Repository.GitCheckoutRevision(s, targetHash)
+	oldDepsHash, _ := s.config.Repository.GitHashObject(ctx, s, depsFile)
+	err := s.config.Repository.GitCheckoutRevision(ctx, s, targetHash)
 	if err != nil {
 		return err
 	}
-	newDepsHash, _ := s.config.Repository.GitHashObject(s, depsFile)
+	newDepsHash, _ := s.config.Repository.GitHashObject(ctx, s, depsFile)
 	if oldDepsHash != newDepsHash {
 		s.channel.Info("DEPS changed. Running 'sync'")
-		return s.RunGclientSync()
+		return s.RunGclientSync(ctx)
 	}
 	return nil
 }
 
-func (s *Session) RunGclientSync() error {
+func (s *Session) RunGclientSync(ctx context.Context) error {
 	if s.config.PlatformName == "mac" {
 		os.Setenv("FORCE_MAC_TOOLCHAIN", "1")
 	}
-	return s.config.Repository.CheckHere(s, "gclient", "sync")
+	return s.config.Repository.CheckHere(ctx, s, "gclient", "sync")
 }
 
-func (s *Session) PrepareBuild() error {
+func (s *Session) PrepareBuild(ctx context.Context) error {
 	if _, err := os.Stat(s.config.GetBuildPath()); os.IsNotExist(err) {
 		err = os.MkdirAll(s.config.GetBuildPath(), os.ModeDir|0750)
 		if err != nil {
 			return err
 		}
 	}
-	return s.runMB("gen")
+	return s.runMB(ctx, "gen")
 }
 
-func (s *Session) EnsureGomaIfNecessary() error {
+func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 	gomaCtlStampFile := s.config.GetBuildPath("goma_ensure_start_stamp")
 	fileInfo, ok := os.Stat(gomaCtlStampFile)
 	if ok == nil && fileInfo.ModTime().Add(time.Second*60*60*6).After(time.Now()) {
@@ -197,7 +198,7 @@ func (s *Session) EnsureGomaIfNecessary() error {
 		attemptedToStartGoma := false
 		gomaCommand := []string{path.Join(s.config.Host.GomaPath, "goma_ctl.bat")}
 		for i := 0; i < 5; i += 1 {
-			output, err := s.config.Repository.RunHere(s, append(gomaCommand, "status")...)
+			output, err := s.config.Repository.RunHere(ctx, s, append(gomaCommand, "status")...)
 			if err != nil {
 				return err
 			}
@@ -213,7 +214,7 @@ func (s *Session) EnsureGomaIfNecessary() error {
 
 			if !attemptedToStartGoma {
 				attemptedToStartGoma = true
-				s.CommandAtSourceDir(append(gomaCommand, "ensure_start")...)
+				s.CommandAtSourceDir(ctx, append(gomaCommand, "ensure_start")...)
 			}
 			s.channel.Info("Waiting for compiler proxy ...")
 			time.Sleep(time.Second)
@@ -222,17 +223,17 @@ func (s *Session) EnsureGomaIfNecessary() error {
 		return TimedOutError
 	} else {
 		return s.CommandAtSourceDir(
-			path.Join(s.config.Host.GomaPath, "goma_ctl.py"), "ensure_start")
+			ctx, path.Join(s.config.Host.GomaPath, "goma_ctl.py"), "ensure_start")
 	}
 }
 
-func (s *Session) BuildTargets(targets ...string) error {
+func (s *Session) BuildTargets(ctx context.Context, targets ...string) error {
 	if len(targets) == 0 {
 		s.channel.Error("No targets. Specify 'all' to build all targets. (Not recommended)")
 		return NoTargetError
 	}
 
-	s.EnsureGomaIfNecessary()
+	s.EnsureGomaIfNecessary(ctx)
 
 	// Isolated targets are special in that they don't describe their dependencies. Hence
 	// they need to be removed so that they can be rebuilt.
@@ -248,10 +249,10 @@ func (s *Session) BuildTargets(targets ...string) error {
 		command = append(command, "-j", fmt.Sprintf("%d", s.config.Host.MaxBuildJobs))
 	}
 	command = append(command, targets...)
-	return s.CommandAtSourceDir(command...)
+	return s.CommandAtSourceDir(ctx, command...)
 }
 
-func (s *Session) CleanTargets(targets ...string) error {
+func (s *Session) CleanTargets(ctx context.Context, targets ...string) error {
 	if len(targets) == 0 {
 		s.channel.Error("No targets. Sepcify 'all' to clean all targets.")
 		return NoTargetError
@@ -265,10 +266,10 @@ func (s *Session) CleanTargets(targets ...string) error {
 
 	command := []string{"ninja", "-C", s.config.GetBuildPath(), "-t", "clean"}
 	command = append(command, targets...)
-	return s.CommandAtSourceDir(command...)
+	return s.CommandAtSourceDir(ctx, command...)
 }
 
-func (s *Session) Clobber(force bool) error {
+func (s *Session) Clobber(ctx context.Context, force bool) error {
 	if !force {
 		s.channel.Info(fmt.Sprintf("Use 'force' to remove contents of %s", s.config.GetBuildPath()))
 		return nil
@@ -279,11 +280,11 @@ func (s *Session) Clobber(force bool) error {
 	if err != nil {
 		return err
 	}
-	return s.PrepareBuild()
+	return s.PrepareBuild(ctx)
 }
 
-func (s *Session) PushCurrentBranch() error {
-	return s.config.Repository.GitPushCurrentBranch(s)
+func (s *Session) PushCurrentBranch(ctx context.Context) error {
+	return s.config.Repository.GitPushCurrentBranch(ctx, s)
 }
 
 func (s *Session) setTestRunnerEnvironment() {
@@ -297,7 +298,7 @@ func (s *Session) setTestRunnerEnvironment() {
 	}
 }
 
-func (s *Session) RunTestTarget(target string, args []string, revision string) error {
+func (s *Session) RunTestTarget(ctx context.Context, target string, args []string, revision string) error {
 	if len(args) == 0 {
 		s.channel.Error("Specify \"all\" to run all tests")
 		return InvalidArgumentError
@@ -327,37 +328,37 @@ func (s *Session) RunTestTarget(target string, args []string, revision string) e
 		commandLine = append(commandLine, "--gtest_filter="+strings.Join(testFilters, ":"))
 	}
 
-	err := s.SyncWorkdir(revision)
+	err := s.SyncWorkdir(ctx, revision)
 	if err != nil {
 		return err
 	}
-	err = s.BuildTargets(target)
+	err = s.BuildTargets(ctx, target)
 	if err != nil {
 		return err
 	}
 	s.setTestRunnerEnvironment()
-	return s.runMB(commandLine...)
+	return s.runMB(ctx, commandLine...)
 }
 
-func (s *Session) GitStatus() error {
-	return s.CommandAtSourceDir("git", "status")
+func (s *Session) GitStatus(ctx context.Context) error {
+	return s.CommandAtSourceDir(ctx, "git", "status")
 }
 
-func (s *Session) updateGitWorkDir(workDir string) error {
-	err := s.CheckCommand(workDir, "git", "checkout", "origin/master")
+func (s *Session) updateGitWorkDir(ctx context.Context, workDir string) error {
+	err := s.CheckCommand(ctx, workDir, "git", "checkout", "origin/master")
 	if err != nil {
 		return err
 	}
 
-	return s.CheckCommand(workDir, "git", "pull", "origin", "master")
+	return s.CheckCommand(ctx, workDir, "git", "pull", "origin", "master")
 }
 
-func (s *Session) GitRebaseUpdate(fetch bool) error {
-	if s.config.Repository.GitRemote != "" {
+func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
+	if s.config.Repository.GitConfig.Remote != "" {
 		return NoUpstreamError
 	}
 
-	output, err := s.config.Repository.RunHere(s, "git", "status", "--porcelain",
+	output, err := s.config.Repository.RunHere(ctx, s, "git", "status", "--porcelain",
 		"--untracked-files=normal")
 	if err != nil {
 		return err
@@ -371,32 +372,32 @@ func (s *Session) GitRebaseUpdate(fetch bool) error {
 	// Ignoring error here since we should be able to run rebase-update with a
 	// detached head. If there's no symolic ref, then we'll skip the final
 	// checkout step.
-	previousHead, _ := s.config.Repository.RunHere(s, "git", "symbolic-ref", "-q", "HEAD")
+	previousHead, _ := s.config.Repository.RunHere(ctx, s, "git", "symbolic-ref", "-q", "HEAD")
 
 	if fetch {
 		s.channel.Info("Updating clank")
-		err = s.updateGitWorkDir(s.config.GetSourcePath("clank"))
+		err = s.updateGitWorkDir(ctx, s.config.GetSourcePath("clank"))
 		if err != nil {
 			return err
 		}
 
 		s.channel.Info("Updating chromium")
-		err = s.updateGitWorkDir(s.config.GetSourcePath())
+		err = s.updateGitWorkDir(ctx, s.config.GetSourcePath())
 		if err != nil {
 			return err
 		}
 
-		err = s.RunGclientSync()
+		err = s.RunGclientSync(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = s.config.Repository.CheckHere(s, "git", "clean", "-f")
-	err = s.config.Repository.CheckHere(s, "git", "rebase-update",
+	err = s.config.Repository.CheckHere(ctx, s, "git", "clean", "-f")
+	err = s.config.Repository.CheckHere(ctx, s, "git", "rebase-update",
 		"--no-fetch", "--keep-going")
 	if previousHead != "" {
-		s.CommandAtSourceDir("git", "checkout", previousHead)
+		s.CommandAtSourceDir(ctx, "git", "checkout", previousHead)
 	}
 
 	return err

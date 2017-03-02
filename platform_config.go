@@ -1,6 +1,7 @@
 package stonesthrow
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -65,6 +66,6 @@ func (p *PlatformConfig) Validate() error {
 	return nil
 }
 
-func (p *PlatformConfig) RunHere(e Executor, command ...string) (string, error) {
-	return e.RunCommand(p.BuildPath, command...)
+func (p *PlatformConfig) RunHere(ctx context.Context, e Executor, command ...string) (string, error) {
+	return e.RunCommand(ctx, p.BuildPath, command...)
 }
