@@ -401,3 +401,10 @@ func (s *Session) GitRebaseUpdate(fetch bool) error {
 
 	return err
 }
+
+func (s *Session) GetBranches() error {
+}
+
+func (s *Session) GetBranchesFromRemote(serverConfig Config) error {
+	// Figure out which remote maps to
+}

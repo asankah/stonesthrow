@@ -8,20 +8,23 @@ import (
 	"path/filepath"
 )
 
-func runClientWithStream(
-	request RequestMessage,
-	handler chan interface{},
-	reader io.Reader,
-	writer io.Writer) error {
+func runClientWithStream(clientConfig Config, request RequestMessage, handler chan interface{},
+	reader io.Reader, writer io.Writer) error {
 
 	wrappedConn := &WrappedMessageConnector{in: reader, out: writer}
 	wrappedConn.Init()
 	defer wrappedConn.Close()
-	wrappedConn.Send(request)
+
+	channel := Channel{conn: wrappedConn}
+
+	channel.Request(request)
+	clientSession := Session{
+		config:       clientConfig,
+		channel:      channel,
+		processAdder: nil}
 
 	for {
-
-		response, err := wrappedConn.Receive()
+		response, err := channel.Receive()
 		if err == io.EOF || response == nil {
 			return nil
 		}
@@ -29,15 +32,21 @@ func runClientWithStream(
 			return err
 		}
 
+		// Check if we got a request. The channel allows two way comms.
+		// Only some requests make sense.
+		incomingRequest, ok := response.(*RequestMessage)
+		if ok {
+			DispatchRequest(&clientSession, *incomingRequest)
+			continue
+		}
+
+		// Otherwise, forward the response to the display handler.
 		handler <- response
 	}
 }
 
-func runWithLocalEndpoint(
-	serverConfig Config,
-	endpoint Endpoint,
-	request RequestMessage,
-	handler chan interface{}) error {
+func runWithLocalEndpoint(clientConfig Config, serverConfig Config, endpoint Endpoint,
+	request RequestMessage, handler chan interface{}) error {
 
 	conn, err := net.Dial(endpoint.Network, endpoint.Address)
 	if err != nil {
@@ -46,7 +55,7 @@ func runWithLocalEndpoint(
 
 	defer conn.Close()
 
-	return runClientWithStream(request, handler, conn, conn)
+	return runClientWithStream(clientConfig, request, handler, conn, conn)
 }
 
 type localStaticConnection struct {
@@ -163,7 +172,7 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 	cmd.Stderr = os.Stderr
 	cmd.Start()
 
-	return runClientWithStream(request, handler, readEnd, writeEnd)
+	return runClientWithStream(clientConfig, request, handler, readEnd, writeEnd)
 }
 
 func RunClient(e Executor, clientConfig Config, serverConfig Config, request RequestMessage,
@@ -180,7 +189,7 @@ func RunClient(e Executor, clientConfig Config, serverConfig Config, request Req
 
 	for _, endpoint := range serverConfig.Platform.Endpoints {
 		if endpoint.Host == clientConfig.Host {
-			return runWithLocalEndpoint(serverConfig, endpoint, request, handler)
+			return runWithLocalEndpoint(clientConfig, serverConfig, endpoint, request, handler)
 		}
 	}
 

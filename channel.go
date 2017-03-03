@@ -51,9 +51,12 @@ func (c Channel) ListProcesses(processList ProcessListMessage) {
 	c.conn.Send(processList)
 }
 
+func (c Channel) Request(req RequestMessage) {
+	c.conn.Send(req)
+}
+
 func (c Channel) Receive() (interface{}, error) {
-	r, e := c.conn.Receive()
-	return r, e
+	return c.conn.Receive()
 }
 
 func (c Channel) ListJobs(joblist JobListMessage) {
