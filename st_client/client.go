@@ -12,6 +12,8 @@ import (
 )
 
 func main() {
+	stonesthrow.InitializeCommands()
+
 	defaultServerPlatform := path.Base(os.Args[0])
 	defaultConfig := stonesthrow.GetDefaultConfigFile()
 
@@ -95,15 +97,18 @@ func main() {
 	req.Command = arguments[0]
 	req.Arguments = arguments[1:]
 	req.Repository = *repository
-	commandHandler, ok := stonesthrow.GetHandlerForCommand(req.Command)
-	if !ok || commandHandler.NeedsRevision() {
-		if serverConfig.Repository.GitConfig.RemoteHost != clientConfig.Host {
-			log.Println("Creating BUILDER_HEAD branch, but the server may not be able to fetch it.")
+	req.SourceHostname = clientConfig.Host.Name
+	if serverConfig.Host != clientConfig.Host {
+		commandHandler, ok := stonesthrow.GetHandlerForCommand(req.Command)
+		if !ok || commandHandler.NeedsRevision() {
+			if serverConfig.Repository.GitConfig.RemoteHost != clientConfig.Host {
+				log.Println("Creating BUILDER_HEAD branch, but the server may not be able to fetch it.")
+			}
+			req.Revision, err = clientConfig.Repository.GitCreateBuilderHead(context.Background(), executor)
+			if err != nil {
+				log.Fatal(err.Error())
+			}
 		}
-		req.Revision, err = clientConfig.Repository.GitCreateBuilderHead(context.Background(), executor)
-	}
-	if err != nil {
-		log.Fatal(err.Error())
 	}
 
 	formatter := ConsoleFormatter{config: &serverConfig, porcelain: *porcelain}
@@ -116,7 +121,7 @@ func main() {
 		done <- 0
 	}()
 
-	err = stonesthrow.RunClient(executor, clientConfig, serverConfig, req, output)
+	err = stonesthrow.ExecuteRequest(executor, clientConfig, serverConfig, req, output)
 	if err != nil {
 		log.Fatalf("Client failed: %#v", err)
 	}

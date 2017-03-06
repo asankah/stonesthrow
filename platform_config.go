@@ -69,3 +69,12 @@ func (p *PlatformConfig) Validate() error {
 func (p *PlatformConfig) RunHere(ctx context.Context, e Executor, command ...string) (string, error) {
 	return e.RunCommand(ctx, p.BuildPath, command...)
 }
+
+func (p *PlatformConfig) GetAllTargets(testOnly bool) (map[string]Command, error) {
+	return map[string]Command{
+		"net_unittests":        {Aliases: []string{"nu"}},
+		"content_unittests":    {Aliases: []string{"cu"}},
+		"content_browsertests": {Aliases: []string{"cb"}},
+		"unit_tests":           {},
+		"browser_tests":        {}}, nil
+}

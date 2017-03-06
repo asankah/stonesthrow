@@ -51,13 +51,34 @@ func (c Channel) ListProcesses(processList ProcessListMessage) {
 	c.conn.Send(processList)
 }
 
+func (c Channel) Send(message interface{}) error {
+	return c.conn.Send(message)
+}
+
 func (c Channel) Receive() (interface{}, error) {
 	r, e := c.conn.Receive()
 	return r, e
 }
 
+func (c Channel) NewSendChannel() chan interface{} {
+	channel := make(chan interface{})
+	go func() {
+		for m := range channel {
+			if m != nil {
+				c.Send(m)
+			}
+		}
+	}()
+
+	return channel
+}
+
 func (c Channel) ListJobs(joblist JobListMessage) {
 	c.conn.Send(joblist)
+}
+
+func (c Channel) Request(req RequestMessage) {
+	c.conn.Send(req)
 }
 
 func (c Channel) SwapConnection(nc Connection) Connection {

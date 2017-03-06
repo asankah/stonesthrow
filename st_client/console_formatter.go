@@ -224,8 +224,8 @@ func (f *ConsoleFormatter) Format(message interface{}) error {
 
 {{end}}
 {{if .Commands}}  Commands:{{range $cmd, $c := .Commands}}
-    {{title $cmd}}: {{if $c.Aliases}}[{{range $c.Aliases}}{{info .}}{{end}}]{{if $c.Doc}}
-      {{$c.Doc}}{{end}}{{else}}{{$c.Doc}}{{end}}{{end}}
+    {{title $cmd}}: {{if $c.Aliases}}[{{range $c.Aliases}}{{info .}}{{end}}]{{end}}{{if $c.Usage}}
+      {{$c.Usage}}{{else}}{{$c.Synopsis}}{{end}}{{end}}
 {{end}}`, t)
 
 	case *stonesthrow.JobListMessage:

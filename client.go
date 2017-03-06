@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 )
 
-func runClientWithStream(
+func runClientWithReaderWriter(
+	clientConfig Config,
+	serverConfig Config,
 	request RequestMessage,
 	handler chan interface{},
 	reader io.Reader,
@@ -20,9 +22,14 @@ func runClientWithStream(
 	defer wrappedConn.Close()
 	wrappedConn.Send(request)
 
-	for {
+	channel := Channel{conn: wrappedConn}
 
-		response, err := wrappedConn.Receive()
+	reverseClientSession := Session{
+		local: clientConfig, remote: serverConfig,
+		channel: channel, processAdder: nil}
+
+	for {
+		response, err := channel.Receive()
 		if err == io.EOF || response == nil {
 			return nil
 		}
@@ -30,11 +37,17 @@ func runClientWithStream(
 			return err
 		}
 
-		handler <- response
+		requestMessage, ok := response.(*RequestMessage)
+		if ok {
+			DispatchRequest(context.Background(), &reverseClientSession, *requestMessage)
+		} else {
+			handler <- response
+		}
 	}
 }
 
 func runWithLocalEndpoint(
+	clientConfig Config,
 	serverConfig Config,
 	endpoint Endpoint,
 	request RequestMessage,
@@ -47,7 +60,7 @@ func runWithLocalEndpoint(
 
 	defer conn.Close()
 
-	return runClientWithStream(request, handler, conn, conn)
+	return runClientWithReaderWriter(clientConfig, serverConfig, request, handler, conn, conn)
 }
 
 type localStaticConnection struct {
@@ -92,7 +105,7 @@ func (l localStaticConnection) Close() {}
 func runLocallyWithoutServer(serverConfig Config, request RequestMessage, handler chan interface{}) error {
 	connection := localStaticConnection{ResponseSink: handler}
 	channel := Channel{conn: connection}
-	session := Session{config: serverConfig, channel: channel, processAdder: nil}
+	session := Session{local: serverConfig, remote: serverConfig, channel: channel, processAdder: nil}
 	DispatchRequest(context.Background(), &session, request)
 	return nil
 }
@@ -137,11 +150,11 @@ func RunPassthroughClient(clientConfig, serverConfig Config) error {
 func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, serverConfig Config,
 	request RequestMessage, handler chan interface{}) error {
 
-	context := context.Background()
+	ctx := context.Background()
 	commandHandler, ok := GetHandlerForCommand(request.Command)
-	if !ok || commandHandler.needsRevision {
+	if !ok || commandHandler.needsRevision == NEEDS_REVISION {
 		// Passthrough requires that the server already have the correct BUILDER_HEAD.
-		err := clientConfig.Repository.GitPushRemote(context, e)
+		err := clientConfig.Repository.GitPushBuilderHead(ctx, e)
 		if err != nil {
 			return err
 		}
@@ -155,7 +168,7 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 		"--server", serverConfig.PlatformName,
 		"--repository", serverConfig.RepositoryName,
 		"--passthrough"}
-	cmd := exec.CommandContext(context, "ssh", sshCommand...)
+	cmd := exec.CommandContext(ctx, "ssh", sshCommand...)
 
 	writeEnd, err := cmd.StdinPipe()
 	if err != nil {
@@ -168,10 +181,10 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 	cmd.Stderr = os.Stderr
 	cmd.Start()
 
-	return runClientWithStream(request, handler, readEnd, writeEnd)
+	return runClientWithReaderWriter(clientConfig, serverConfig, request, handler, readEnd, writeEnd)
 }
 
-func RunClient(e Executor, clientConfig Config, serverConfig Config, request RequestMessage,
+func ExecuteRequest(e Executor, clientConfig Config, serverConfig Config, request RequestMessage,
 	handler chan interface{}) error {
 	defer close(handler)
 
@@ -185,7 +198,7 @@ func RunClient(e Executor, clientConfig Config, serverConfig Config, request Req
 
 	for _, endpoint := range serverConfig.Platform.Endpoints {
 		if endpoint.Host == clientConfig.Host {
-			return runWithLocalEndpoint(serverConfig, endpoint, request, handler)
+			return runWithLocalEndpoint(clientConfig, serverConfig, endpoint, request, handler)
 		}
 	}
 

@@ -193,7 +193,7 @@ func (j *SessionTracker) KillRunningProcesses() ProcessListMessage {
 }
 
 type Server struct {
-	config         Config
+	local          Config
 	cancelFunc     context.CancelFunc
 	sessionTracker SessionTracker
 }
@@ -248,9 +248,14 @@ func (s *Server) runSessionWithConnection(ctx context.Context, c io.ReadWriter, 
 		Running:    true,
 		CancelFunc: cancelFunc}
 
+	var remoteConfig Config
+	remoteConfig.SelectServerConfig(s.local.ConfigurationFile, req.SourcePlatform, req.Repository)
+
 	s.sessionTracker.AddSession(&sessionInfo)
 
-	sessionInfo.Session = &Session{config: s.config, channel: channel,
+	sessionInfo.Session = &Session{local: s.local,
+		remote:       remoteConfig,
+		channel:      channel,
 		processAdder: s.sessionTracker.GetSessionProcessAdder(&sessionInfo)}
 
 	log.Printf("Dispatching request %s", req.Command)
@@ -272,7 +277,7 @@ func (s *Server) killProcessHandler(session *Session, req RequestMessage) {
 	session.channel.ListProcesses(s.sessionTracker.KillRunningProcesses())
 }
 
-func (s *Server) Run(config Config) error {
+func (s *Server) Run(local Config) error {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	s.cancelFunc = cancelFunc
 	nextSessionId = 1
@@ -291,16 +296,16 @@ func (s *Server) Run(config Config) error {
 	AddHandler("join", `Join a running job.
 
 The ID of the job should be specified as the only argument. Any new processes started by the job will use the newly established channel for IO. Use 'jobs' to find the job ID for a long running command.`, nil)
-	if !config.IsValid() {
+	if !local.IsValid() {
 		return ConfigIncompleteError
 	}
-	s.config = config
-	ep := s.config.Platform.EndpointFor(config.Host)
+	s.local = local
+	ep := s.local.Platform.EndpointFor(local.Host)
 	if ep == nil {
 		return EndpointNotFoundError
 	}
 
-	log.Printf("Starting server for %s at %s on %s. This is PID %d", config.PlatformName,
+	log.Printf("Starting server for %s at %s on %s. This is PID %d", local.PlatformName,
 		ep.Address, ep.HostName, os.Getpid())
 	listener, err := net.Listen(ep.Network, ep.Address)
 	if err != nil {

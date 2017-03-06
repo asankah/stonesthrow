@@ -1,7 +1,6 @@
 package stonesthrow
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -29,7 +28,8 @@ type ProcessRecord struct {
 }
 
 type Session struct {
-	config       Config
+	local        Config
+	remote       Config
 	channel      Channel
 	processAdder ProcessAdder
 }
@@ -39,7 +39,7 @@ func (s *Session) RunCommand(ctx context.Context, workdir string, command ...str
 }
 
 func (s *Session) CommandAtSourceDir(ctx context.Context, command ...string) error {
-	return s.config.Repository.CheckHere(ctx, s, command...)
+	return s.local.Repository.CheckHere(ctx, s, command...)
 }
 
 func (s *Session) CheckCommand(ctx context.Context, workDir string, command ...string) error {
@@ -102,11 +102,11 @@ func (s *Session) runMB(ctx context.Context, command ...string) error {
 	}
 
 	arguments := []string{
-		"python", s.config.GetSourcePath("tools", "mb", "mb.py"),
-		command[0], s.config.GetBuildPath(),
-		"--config=" + s.config.Platform.MbConfigName}
-	if s.config.Host.GomaPath != "" {
-		arguments = append(arguments, "--goma-dir", s.config.Host.GomaPath)
+		"python", s.local.GetSourcePath("tools", "mb", "mb.py"),
+		command[0], s.local.GetBuildPath(),
+		"--config=" + s.local.Platform.MbConfigName}
+	if s.local.Host.GomaPath != "" {
+		arguments = append(arguments, "--goma-dir", s.local.Host.GomaPath)
 	}
 	arguments = append(arguments, command[1:]...)
 	return s.CommandAtSourceDir(ctx, arguments...)
@@ -123,42 +123,14 @@ func ShortTargetNameFromGNLabel(label string) string {
 	}
 }
 
-func (s *Session) GetAllTargets(testOnly bool) (map[string]Command, error) {
-	return map[string]Command{
-		"net_unittests":        {Aliases: []string{"nu"}},
-		"content_unittests":    {Aliases: []string{"cu"}},
-		"content_browsertests": {Aliases: []string{"cb"}},
-		"unit_tests":           {},
-		"browser_tests":        {}}, nil
-}
-
-func (s *Session) GetAllTargetsSlow(ctx context.Context, testOnly bool) (map[string]Command, error) {
-	command := []string{"gn", "ls", s.config.GetBuildPath(), "--type=executable", "--as=label"}
-	if testOnly {
-		command = append(command, "--testonly=true")
-	}
-	allLabels, err := s.config.Repository.RunHere(ctx, s, command...)
-	if err != nil {
-		return nil, err
-	}
-	targetMap := make(map[string]Command)
-	scanner := bufio.NewScanner(strings.NewReader(allLabels))
-	for scanner.Scan() {
-		label := scanner.Text()
-		targetMap[ShortTargetNameFromGNLabel(label)] = Command{
-			Aliases: []string{label}}
-	}
-	return targetMap, nil
-}
-
 func (s *Session) SyncWorkdir(ctx context.Context, targetHash string) error {
-	depsFile := s.config.GetSourcePath("DEPS")
-	oldDepsHash, _ := s.config.Repository.GitHashObject(ctx, s, depsFile)
-	err := s.config.Repository.GitCheckoutRevision(ctx, s, targetHash)
+	depsFile := s.local.GetSourcePath("DEPS")
+	oldDepsHash, _ := s.local.Repository.GitHashObject(ctx, s, depsFile)
+	err := s.local.Repository.GitCheckoutRevision(ctx, s, targetHash)
 	if err != nil {
 		return err
 	}
-	newDepsHash, _ := s.config.Repository.GitHashObject(ctx, s, depsFile)
+	newDepsHash, _ := s.local.Repository.GitHashObject(ctx, s, depsFile)
 	if oldDepsHash != newDepsHash {
 		s.channel.Info("DEPS changed. Running 'sync'")
 		return s.RunGclientSync(ctx)
@@ -167,15 +139,15 @@ func (s *Session) SyncWorkdir(ctx context.Context, targetHash string) error {
 }
 
 func (s *Session) RunGclientSync(ctx context.Context) error {
-	if s.config.PlatformName == "mac" {
+	if s.local.PlatformName == "mac" {
 		os.Setenv("FORCE_MAC_TOOLCHAIN", "1")
 	}
-	return s.config.Repository.CheckHere(ctx, s, "gclient", "sync")
+	return s.local.Repository.CheckHere(ctx, s, "gclient", "sync")
 }
 
 func (s *Session) PrepareBuild(ctx context.Context) error {
-	if _, err := os.Stat(s.config.GetBuildPath()); os.IsNotExist(err) {
-		err = os.MkdirAll(s.config.GetBuildPath(), os.ModeDir|0750)
+	if _, err := os.Stat(s.local.GetBuildPath()); os.IsNotExist(err) {
+		err = os.MkdirAll(s.local.GetBuildPath(), os.ModeDir|0750)
 		if err != nil {
 			return err
 		}
@@ -184,7 +156,7 @@ func (s *Session) PrepareBuild(ctx context.Context) error {
 }
 
 func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
-	gomaCtlStampFile := s.config.GetBuildPath("goma_ensure_start_stamp")
+	gomaCtlStampFile := s.local.GetBuildPath("goma_ensure_start_stamp")
 	fileInfo, ok := os.Stat(gomaCtlStampFile)
 	if ok == nil && fileInfo.ModTime().Add(time.Second*60*60*6).After(time.Now()) {
 		return nil
@@ -194,11 +166,11 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 		stampFile.Close()
 	}
 
-	if s.config.PlatformName == "win" {
+	if s.local.PlatformName == "win" {
 		attemptedToStartGoma := false
-		gomaCommand := []string{path.Join(s.config.Host.GomaPath, "goma_ctl.bat")}
+		gomaCommand := []string{path.Join(s.local.Host.GomaPath, "goma_ctl.bat")}
 		for i := 0; i < 5; i += 1 {
-			output, err := s.config.Repository.RunHere(ctx, s, append(gomaCommand, "status")...)
+			output, err := s.local.Repository.RunHere(ctx, s, append(gomaCommand, "status")...)
 			if err != nil {
 				return err
 			}
@@ -223,7 +195,7 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 		return TimedOutError
 	} else {
 		return s.CommandAtSourceDir(
-			ctx, path.Join(s.config.Host.GomaPath, "goma_ctl.py"), "ensure_start")
+			ctx, path.Join(s.local.Host.GomaPath, "goma_ctl.py"), "ensure_start")
 	}
 }
 
@@ -239,14 +211,14 @@ func (s *Session) BuildTargets(ctx context.Context, targets ...string) error {
 	// they need to be removed so that they can be rebuilt.
 	for _, target := range targets {
 		if strings.HasSuffix(target, "_run") {
-			isolatedFilename := s.config.GetBuildPath(target[:len(target)-4] + ".isolated")
+			isolatedFilename := s.local.GetBuildPath(target[:len(target)-4] + ".isolated")
 			os.Remove(isolatedFilename)
 		}
 	}
 
-	command := []string{"ninja", "-C", s.config.GetBuildPath()}
-	if s.config.Host.MaxBuildJobs != 0 {
-		command = append(command, "-j", fmt.Sprintf("%d", s.config.Host.MaxBuildJobs))
+	command := []string{"ninja", "-C", s.local.GetBuildPath()}
+	if s.local.Host.MaxBuildJobs != 0 {
+		command = append(command, "-j", fmt.Sprintf("%d", s.local.Host.MaxBuildJobs))
 	}
 	command = append(command, targets...)
 	return s.CommandAtSourceDir(ctx, command...)
@@ -264,31 +236,27 @@ func (s *Session) CleanTargets(ctx context.Context, targets ...string) error {
 		}
 	}
 
-	command := []string{"ninja", "-C", s.config.GetBuildPath(), "-t", "clean"}
+	command := []string{"ninja", "-C", s.local.GetBuildPath(), "-t", "clean"}
 	command = append(command, targets...)
 	return s.CommandAtSourceDir(ctx, command...)
 }
 
 func (s *Session) Clobber(ctx context.Context, force bool) error {
 	if !force {
-		s.channel.Info(fmt.Sprintf("Use 'force' to remove contents of %s", s.config.GetBuildPath()))
+		s.channel.Info(fmt.Sprintf("Use 'force' to remove contents of %s", s.local.GetBuildPath()))
 		return nil
 	}
 
-	s.channel.Info(fmt.Sprintf("Removing contents of %s", s.config.GetBuildPath()))
-	err := os.RemoveAll(s.config.GetBuildPath())
+	s.channel.Info(fmt.Sprintf("Removing contents of %s", s.local.GetBuildPath()))
+	err := os.RemoveAll(s.local.GetBuildPath())
 	if err != nil {
 		return err
 	}
 	return s.PrepareBuild(ctx)
 }
 
-func (s *Session) PushCurrentBranch(ctx context.Context) error {
-	return s.config.Repository.GitPushCurrentBranch(ctx, s)
-}
-
 func (s *Session) setTestRunnerEnvironment() {
-	symbolizerPath := s.config.GetSourcePath(
+	symbolizerPath := s.local.GetSourcePath(
 		"third_party", "llvm-build", "Release+Asserts", "bin",
 		"llvm-symbolizer")
 	if fileInfo, err := os.Stat(symbolizerPath); err == nil && !fileInfo.IsDir() {
@@ -354,11 +322,11 @@ func (s *Session) updateGitWorkDir(ctx context.Context, workDir string) error {
 }
 
 func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
-	if s.config.Repository.GitConfig.Remote != "" {
+	if s.local.Repository.GitConfig.Remote != "" {
 		return NoUpstreamError
 	}
 
-	output, err := s.config.Repository.RunHere(ctx, s, "git", "status", "--porcelain",
+	output, err := s.local.Repository.RunHere(ctx, s, "git", "status", "--porcelain",
 		"--untracked-files=normal")
 	if err != nil {
 		return err
@@ -372,17 +340,17 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 	// Ignoring error here since we should be able to run rebase-update with a
 	// detached head. If there's no symolic ref, then we'll skip the final
 	// checkout step.
-	previousHead, _ := s.config.Repository.RunHere(ctx, s, "git", "symbolic-ref", "-q", "HEAD")
+	previousHead, _ := s.local.Repository.RunHere(ctx, s, "git", "symbolic-ref", "-q", "HEAD")
 
 	if fetch {
 		s.channel.Info("Updating clank")
-		err = s.updateGitWorkDir(ctx, s.config.GetSourcePath("clank"))
+		err = s.updateGitWorkDir(ctx, s.local.GetSourcePath("clank"))
 		if err != nil {
 			return err
 		}
 
 		s.channel.Info("Updating chromium")
-		err = s.updateGitWorkDir(ctx, s.config.GetSourcePath())
+		err = s.updateGitWorkDir(ctx, s.local.GetSourcePath())
 		if err != nil {
 			return err
 		}
@@ -393,12 +361,74 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 		}
 	}
 
-	err = s.config.Repository.CheckHere(ctx, s, "git", "clean", "-f")
-	err = s.config.Repository.CheckHere(ctx, s, "git", "rebase-update",
+	err = s.local.Repository.CheckHere(ctx, s, "git", "clean", "-f")
+	err = s.local.Repository.CheckHere(ctx, s, "git", "rebase-update",
 		"--no-fetch", "--keep-going")
 	if previousHead != "" {
 		s.CommandAtSourceDir(ctx, "git", "checkout", previousHead)
 	}
 
 	return err
+}
+
+func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) error {
+	if len(branches) == 0 {
+		return InvalidArgumentError
+	}
+
+	localRepository := s.local.Repository
+	var remoteRepository *RepositoryConfig
+
+	var remoteConfig *Config
+	if s.remote.IsValid() && s.local.Repository.GitConfig.RemoteHost != s.remote.Host {
+		remoteConfig = &s.remote
+		remoteRepository = remoteConfig.Repository
+	} else if s.local.Repository.GitConfig.RemoteHost != nil {
+		remoteHost := s.local.Repository.GitConfig.RemoteHost
+		remoteRepository, ok := remoteHost.Repositories[localRepository.Name]
+		if !ok {
+			return ConfigIncompleteError
+		}
+
+		remoteConfig = &Config{}
+		remoteConfig.SelectServerConfig(s.local.ConfigurationFile,
+			remoteRepository.AnyPlatform().Name, remoteRepository.Name)
+	}
+
+	if remoteConfig == nil || remoteRepository == nil || remoteRepository.Name != localRepository.Name {
+		return ConfigIncompleteError
+	}
+
+	peerSession := Session{local: s.local, remote: *remoteConfig, channel: s.channel, processAdder: s.processAdder}
+	err := peerSession.SendRemoteRequest(RequestMessage{
+		Command:        "__prepare_for_git_push__",
+		Repository:     remoteConfig.Repository.Name,
+		SourcePlatform: s.local.Platform.Name,
+		SourceHostname: s.local.Host.Name})
+	if err != nil {
+		return err
+	}
+
+	err = s.local.Repository.GitPush(ctx, s, branches, true)
+	if err != nil {
+		return err
+	}
+
+	branchConfigs, err := s.local.Repository.GitGetBranchConfig(ctx, s, branches,
+		append(localRepository.GitConfig.BranchProperties,
+			remoteRepository.GitConfig.BranchProperties...))
+	if err != nil {
+		return err
+	}
+
+	return s.SendRemoteRequest(RequestMessage{
+		Command:        "__accept_branch_config__",
+		Repository:     remoteConfig.Repository.Name,
+		SourcePlatform: s.local.Platform.Name,
+		SourceHostname: s.local.Host.Name,
+		BranchConfigs:  branchConfigs})
+}
+
+func (s *Session) SendRemoteRequest(request RequestMessage) error {
+	return ExecuteRequest(s, s.local, s.remote, request, s.channel.NewSendChannel())
 }

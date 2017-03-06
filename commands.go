@@ -10,6 +10,19 @@ import (
 type FlagSetter func(*flag.FlagSet)
 type RequestHandler func(context.Context, *Session, RequestMessage, *flag.FlagSet) error
 
+type NeedsRevision bool
+type ShowInHelp bool
+
+var (
+	NO_REVISION    = NeedsRevision(true)
+	NEEDS_REVISION = NeedsRevision(false)
+)
+
+var (
+	SHOW_IN_HELP   = ShowInHelp(true)
+	HIDE_FROM_HELP = ShowInHelp(false)
+)
+
 type CommandHandler struct {
 	name       string
 	synopsis   string
@@ -17,8 +30,8 @@ type CommandHandler struct {
 	flagSetter FlagSetter
 	handler    RequestHandler
 
-	needsRevision    bool
-	isHiddenFromHelp bool
+	needsRevision NeedsRevision
+	showInHelp    ShowInHelp
 }
 
 func (h CommandHandler) Name() string {
@@ -55,7 +68,7 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 }
 
 func (h CommandHandler) NeedsRevision() bool {
-	return h.needsRevision
+	return h.needsRevision == NEEDS_REVISION
 }
 
 var (
@@ -71,9 +84,9 @@ var DefaultHandlers = []CommandHandler{
 		"branch",
 		`List local branches.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
-			return s.config.Repository.CheckHere(
+			return s.local.Repository.CheckHere(
 				ctx, s, "git", "branch", "--list", "-vvv")
-		}, false, false},
+		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{
 		"build",
@@ -85,7 +98,7 @@ var DefaultHandlers = []CommandHandler{
 			}
 			return s.BuildTargets(ctx, req.Arguments...)
 		},
-		true, false},
+		NEEDS_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{
 		"clean",
@@ -107,14 +120,14 @@ var DefaultHandlers = []CommandHandler{
 
 			if srcValue.Value.String() == "true" {
 				if forceValue.Value.String() == "true" {
-					return s.config.Repository.CheckHere(ctx, s, "git", "clean", "-f")
+					return s.local.Repository.CheckHere(ctx, s, "git", "clean", "-f")
 				} else {
 					s.channel.Info("Specify 'clean source force' to remove files not recognized by git.")
-					return s.config.Repository.CheckHere(ctx, s, "git", "clean", "-n")
+					return s.local.Repository.CheckHere(ctx, s, "git", "clean", "-n")
 				}
 			}
 			return InvalidArgumentError
-		}, false, false},
+		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{
 		"clobber",
@@ -124,20 +137,20 @@ var DefaultHandlers = []CommandHandler{
 		},
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.Clobber(ctx, f.Lookup("force").Value.String() == "true")
-		}, false, false},
+		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{"ping",
 		`Diagnostic. Responds with a pong.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
 			s.channel.Info("Pong")
 			return nil
-		}, false, false},
+		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{"prepare",
 		`Prepare build directory. Runs 'mb gen'.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.PrepareBuild(ctx)
-		}, false, false},
+		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{"pull",
 		`Pull a specific branch from upstream.`, "", nil,
@@ -146,50 +159,59 @@ var DefaultHandlers = []CommandHandler{
 				s.channel.Error("Need to specify branch")
 				return InvalidArgumentError
 			}
-			err := s.config.Repository.GitFetch(ctx, s, req.Arguments[0])
+			err := s.local.Repository.GitFetch(ctx, s, []string{req.Arguments[0]})
 			if err != nil {
 				return err
 			}
-			return s.config.Repository.GitCheckoutRevision(ctx, s, req.Arguments[0])
-		}, false, false},
+			return s.local.Repository.GitCheckoutRevision(ctx, s, req.Arguments[0])
+		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{"push",
 		`Push the current branch to upstream.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
-			return s.PushCurrentBranch(ctx)
-		}, false, false},
+			return s.GitPushToUpstream(ctx, []string{"HEAD"})
+		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{"status",
 		`Run 'git status'.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.GitStatus(ctx)
-		}, false, false},
+		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{"sync",
 		`Run 'gclient sync'.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.RunGclientSync(ctx)
 		},
-		true, false},
+		NEEDS_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{"list",
 		"List available targets", "",
 		func(f *flag.FlagSet) {
 			f.Bool("tests", false, "Lists test targets only")
 		},
-		handleList, false, false}}
+		handleList, NO_REVISION, SHOW_IN_HELP},
+
+	CommandHandler{"__prepare_for_git_push__", "", "", nil,
+		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
+			return s.local.Repository.CheckHere(ctx, s, "git", "checkout", "--detach", "origin/master")
+
+		}, NO_REVISION, HIDE_FROM_HELP},
+
+	CommandHandler{"__accept_branch_config__", "", "", nil,
+		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
+			return s.local.Repository.GitSetBranchConfig(ctx, s, req.BranchConfigs)
+		}, NO_REVISION, HIDE_FROM_HELP}}
 
 func AddHandler(command string, doc string, handler RequestHandler) {
-	initialize()
-	newHandler := CommandHandler{command, doc, "", nil, handler, false, false}
+	newHandler := CommandHandler{command, doc, "", nil, handler, NO_REVISION, SHOW_IN_HELP}
 	handlerMap[newHandler.name] = &newHandler
 	commander.Register(newHandler, "")
 }
 
 func AddTestHandler(command string, handler RequestHandler) {
-	initialize()
 	newHandler := CommandHandler{command, "Runs the specific test target.", "",
-		nil, handler, true, true}
+		nil, handler, NEEDS_REVISION, HIDE_FROM_HELP}
 	handlerMap[newHandler.name] = &newHandler
 	commander.Register(newHandler, "test")
 }
@@ -199,16 +221,16 @@ func handleHelp(ctx context.Context, s *Session, _ RequestMessage, _ *flag.FlagS
 	commandList.Repositories = make(map[string]Repository)
 
 	var chromeRepo Repository
-	chromeRepo.BuildPath = s.config.GetBuildPath()
-	chromeRepo.SourcePath = s.config.GetSourcePath()
-	chromeRepo.Revistion, _ = s.config.Repository.GitRevision(ctx, s, "HEAD")
+	chromeRepo.BuildPath = s.local.GetBuildPath()
+	chromeRepo.SourcePath = s.local.GetSourcePath()
+	chromeRepo.Revistion, _ = s.local.Repository.GitRevision(ctx, s, "HEAD")
 	commandList.Synposis = "Remote build runner"
-	commandList.ConfigFile = s.config.ConfigurationFile.FileName
+	commandList.ConfigFile = s.local.ConfigurationFile.FileName
 	commandList.Repositories["chrome"] = chromeRepo
 
 	commandList.Commands = make(map[string]Command)
 	for _, handler := range DefaultHandlers {
-		if handler.isHiddenFromHelp {
+		if handler.showInHelp == HIDE_FROM_HELP {
 			continue
 		}
 		var c Command
@@ -241,7 +263,7 @@ func handleList(ctx context.Context, s *Session, req RequestMessage, f *flag.Fla
 	if f.Lookup("tests").Value.String() == "true" {
 		testsOnly = true
 	}
-	allTargets, _ := s.GetAllTargets(testsOnly)
+	allTargets, _ := s.local.Platform.GetAllTargets(testsOnly)
 	var commandList CommandListMessage
 	commandList.Synposis = "Known build targets."
 	commandList.Commands = allTargets
@@ -249,21 +271,21 @@ func handleList(ctx context.Context, s *Session, req RequestMessage, f *flag.Fla
 	return nil
 }
 
-func initialize() {
-	initOnce.Do(func() {
-		flagset = flag.NewFlagSet("", flag.ContinueOnError)
-		commander = subcommands.NewCommander(flagset, "")
-		handlerMap = make(map[string]*CommandHandler)
+func InitializeCommands() {
+	flagset = flag.NewFlagSet("", flag.ContinueOnError)
+	commander = subcommands.NewCommander(flagset, "")
+	handlerMap = make(map[string]*CommandHandler)
 
-		for idx, handler := range DefaultHandlers {
-			commander.Register(handler, "")
-			handlerMap[handler.name] = &DefaultHandlers[idx]
-		}
-	})
+	for idx, handler := range DefaultHandlers {
+		commander.Register(handler, "")
+		handlerMap[handler.name] = &DefaultHandlers[idx]
+	}
+
+	AddHandler("help", `Does what you think it does`, handleHelp)
 }
 
-func initializePerConfigHandlers(ctx context.Context, s *Session) {
-	if s.config.Repository.GitConfig.Remote == "" {
+func InitializeHostCommands(localConfig Config) {
+	if localConfig.Repository.GitConfig.Remote == "" {
 		AddHandler("ru", `Run 'git rebase-update'.`,
 			func(ctx context.Context, s *Session, req RequestMessage, _ *flag.FlagSet) error {
 				fetch := true
@@ -279,28 +301,26 @@ func initializePerConfigHandlers(ctx context.Context, s *Session) {
 			})
 	}
 
-	AddHandler("help", `Does what you think it does`, handleHelp)
-
-	allTestTargets, err := s.GetAllTargets(true)
+	allTestTargets, err := localConfig.Platform.GetAllTargets(true)
 	if err != nil {
 		return
 	}
+
 	for target := range allTestTargets {
-		AddTestHandler(target, func(ctx context.Context, s *Session, req RequestMessage, _ *flag.FlagSet) error {
-			return s.RunTestTarget(ctx, target, req.Arguments, req.Revision)
-		})
+		targetCopy := target
+		AddTestHandler(target,
+			func(ctx context.Context, s *Session, req RequestMessage, _ *flag.FlagSet) error {
+				return s.RunTestTarget(ctx, targetCopy, req.Arguments, req.Revision)
+			})
 	}
 }
 
 func GetHandlerForCommand(command string) (*CommandHandler, bool) {
-	initialize()
 	handler, ok := handlerMap[command]
 	return handler, ok
 }
 
 func DispatchRequest(c context.Context, s *Session, req RequestMessage) {
-	initConfigHandlers.Do(func() { initializePerConfigHandlers(c, s) })
-
 	arguments := []string{req.Command}
 	arguments = append(arguments, req.Arguments...)
 

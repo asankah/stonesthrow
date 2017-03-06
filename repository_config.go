@@ -55,6 +55,13 @@ func (r *RepositoryConfig) Validate() error {
 	return nil
 }
 
+func (r *RepositoryConfig) AnyPlatform() *PlatformConfig {
+	for _, platform := range r.Platforms {
+		return platform
+	}
+	return nil
+}
+
 func (r *RepositoryConfig) RelativePath(path string) string {
 	return filepath.Join(r.SourcePath, path)
 }
@@ -65,6 +72,10 @@ func (r *RepositoryConfig) RunHere(ctx context.Context, e Executor, command ...s
 
 func (r *RepositoryConfig) CheckHere(ctx context.Context, e Executor, command ...string) error {
 	return e.CheckCommand(ctx, r.SourcePath, command...)
+}
+
+func (r *RepositoryConfig) GitCurrentBranch(ctx context.Context, e Executor) (string, error) {
+	return e.RunCommand(ctx, r.SourcePath, "git", "symbolic-ref", "--quiet", "--short", "HEAD")
 }
 
 func (r *RepositoryConfig) GitRevision(ctx context.Context, e Executor, name string) (string, error) {
@@ -137,13 +148,45 @@ func (r *RepositoryConfig) GitCreateBuilderHead(ctx context.Context, e Executor)
 	return r.GitRevision(ctx, e, "BUILDER_HEAD")
 }
 
-func (r *RepositoryConfig) GitPush(ctx context.Context, e Executor, branch string) error {
-	// TODO(asanka): Apply branch properties.
+func (r *RepositoryConfig) GitPushBuilderHead(ctx context.Context, e Executor) error {
+	return r.GitPush(ctx, e, []string{"BUILDER_HEAD"}, false)
+}
+
+func (r *RepositoryConfig) GitFetchBuilderHead(ctx context.Context, e Executor) error {
+	return r.GitFetch(ctx, e, []string{"BUILDER_HEAD"})
+}
+
+func (r *RepositoryConfig) branchListToRefspec(ctx context.Context, e Executor, branches []string) []string {
+	refspecs := []string{}
+
+	for _, branch := range branches {
+		if branch == "HEAD" {
+			branch, _ = r.GitCurrentBranch(ctx, e)
+		}
+		if branch == "" {
+			continue
+		}
+		refspecs = append(refspecs, fmt.Sprintf("+%s:%s", branch))
+	}
+	return refspecs
+}
+
+func (r *RepositoryConfig) GitPush(ctx context.Context, e Executor, branches []string, setUpstream bool) error {
+	if len(branches) == 0 {
+		return InvalidArgumentError
+	}
+
 	if r.GitConfig.Remote == "" {
 		return NoUpstreamError
 	}
-	output, err := r.RunHere(ctx, e, "git", "push", r.GitConfig.Remote, "--porcelain", "--thin",
-		"--force", branch)
+
+	command := []string{"git", "push", r.GitConfig.Remote, "--porcelain", "--thin", "--force"}
+	if setUpstream {
+		command = append(command, "--set-upstream")
+	}
+	command = append(command, r.branchListToRefspec(ctx, e, branches)...)
+
+	output, err := r.RunHere(ctx, e, command...)
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -158,29 +201,17 @@ func (r *RepositoryConfig) GitPush(ctx context.Context, e Executor, branch strin
 	return err
 }
 
-func (r *RepositoryConfig) GitPushRemote(ctx context.Context, e Executor) error {
-	return r.GitPush(ctx, e, "BUILDER_HEAD")
-}
-
-func (r *RepositoryConfig) GitPushCurrentBranch(ctx context.Context, e Executor) error {
-	return r.GitPush(ctx, e, "HEAD")
-}
-
-func (r *RepositoryConfig) GitPullRemote(ctx context.Context, e Executor) error {
+func (r *RepositoryConfig) GitFetch(ctx context.Context, e Executor, branches []string) error {
+	if len(branches) == 0 {
+		return InvalidArgumentError
+	}
 	if r.GitConfig.Remote == "" {
 		return NoUpstreamError
 	}
-	return r.CheckHere(ctx, e, "git", "fetch", r.GitConfig.Remote, "--progress",
-		"+BUILDER_HEAD:BUILDER_HEAD",
-		"refs/remotes/origin/master:refs/heads/upstream-origin")
-}
+	command := []string{"git", "fetch", r.GitConfig.Remote}
+	command = append(command, r.branchListToRefspec(ctx, e, append(branches, "refs/remotes/origin/master"))...)
 
-func (r *RepositoryConfig) GitFetch(ctx context.Context, e Executor, branch string) error {
-	if r.GitConfig.Remote == "" {
-		return NoUpstreamError
-	}
-	return r.CheckHere(ctx, e, "git", "fetch", r.GitConfig.Remote, fmt.Sprintf("+%s:%s", branch, branch),
-		"refs/remotes/origin/master:refs/heads/upstream-origin")
+	return r.CheckHere(ctx, e, command...)
 }
 
 func (r *RepositoryConfig) GitHashObject(ctx context.Context, e Executor, path string) (string, error) {
@@ -198,7 +229,7 @@ func (r *RepositoryConfig) GitCheckoutRevision(ctx context.Context, e Executor, 
 	}
 
 	if err != nil {
-		err = r.GitPullRemote(ctx, e)
+		err = r.GitFetchBuilderHead(ctx, e)
 	}
 
 	if err != nil {
@@ -262,4 +293,95 @@ func (r *RepositoryConfig) GitStatus(ctx context.Context, e Executor) (GitStatus
 	}
 
 	return result, nil
+}
+
+func (r *RepositoryConfig) GitGetBranchConfig(ctx context.Context, e Executor,
+	branches []string, properties []string) ([]BranchConfig, error) {
+
+	propertySet := make(map[string]bool)
+	for _, property := range properties {
+		propertySet[property] = true
+	}
+
+	branchSet := make(map[string]*BranchConfig)
+	for _, branch := range branches {
+		revision, err := r.RunHere(ctx, e, "git", "rev-parse", branch)
+		if err != nil {
+			return nil, fmt.Errorf("Unknown branch %s", branch)
+		}
+
+		c := &BranchConfig{Name: branch, Revision: revision}
+		branchSet[branch] = c
+	}
+
+	allPropertiesString, err := r.RunHere(ctx, e, "git", "config", "--local", "-z", "--get-regex", "^branch\\..*")
+	if err != nil {
+		return nil, err
+	}
+
+	configLines := strings.Split(allPropertiesString, "\x00")
+	for _, configLine := range configLines {
+		fields := strings.Split(configLine, "\n")
+		if len(fields) != 2 {
+			return nil, fmt.Errorf("Invalid format for config line: [%s]", configLine)
+		}
+
+		name := fields[0]
+		value := fields[1]
+
+		namefields := strings.Split(name, ".")
+		if len(namefields) != 3 {
+			continue
+		}
+
+		if namefields[0] != "branch" {
+			return nil, fmt.Errorf("Unexpected name field %s in %s", namefields[0], configLine)
+		}
+
+		c, ok := branchSet[namefields[1]]
+		if !ok {
+			continue
+		}
+
+		_, ok = propertySet[namefields[2]]
+		if !ok {
+			continue
+		}
+
+		c.GitConfig[namefields[2]] = value
+	}
+
+	configs := []BranchConfig{}
+
+	for _, c := range branchSet {
+		configs = append(configs, *c)
+	}
+
+	return configs, nil
+}
+
+func (r *RepositoryConfig) GitSetBranchConfig(ctx context.Context, e Executor,
+	branchConfigs []BranchConfig) error {
+
+	for _, config := range branchConfigs {
+		revision, err := r.RunHere(ctx, e, "git", "rev-parse", config.Name)
+		if err != nil {
+			return fmt.Errorf("Unknown branch %s", config.Name)
+		}
+
+		if revision != config.Revision {
+			return fmt.Errorf("Revision mismatch for branch %s. actual %s vs expected %s",
+				config.Name, revision, config.Revision)
+		}
+
+		for name, value := range config.GitConfig {
+			configName := fmt.Sprintf("branch.%s.%s", config.Name, name)
+			err := r.CheckHere(ctx, e, "git", "config", "--local", configName, value)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

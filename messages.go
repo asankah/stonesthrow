@@ -73,9 +73,18 @@ type ProcessListMessage struct {
 	Processes []Process `json:"processes"`
 }
 
+type BranchConfig struct {
+	Name      string            `json:"name"`
+	Revision  string            `json:"revision"`
+	GitConfig map[string]string `json:"config"`
+}
+
 type RequestMessage struct {
-	Command    string   `json:"cmd"`
-	Arguments  []string `json:"args,omitempty"`
-	Repository string   `json:"repo,omitempty"`
-	Revision   string   `json:"revision,omitempty"`
+	Command        string         `json:"cmd"`
+	Arguments      []string       `json:"args,omitempty"`
+	Repository     string         `json:"repo,omitempty"`
+	Revision       string         `json:"revision,omitempty"`
+	SourcePlatform string         `json:"source_platform,omitempty"`
+	SourceHostname string         `json:"source_hostname,omitempty"`
+	BranchConfigs  []BranchConfig `json:"branch_config,omitempty"`
 }

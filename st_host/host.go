@@ -11,6 +11,8 @@ import (
 )
 
 func main() {
+	stonesthrow.InitializeCommands()
+
 	platform := flag.String("platform", "", "Platform to use. See code for valid platform values.")
 	repository := flag.String("repository", "", "Repository to use.")
 	configFileName := flag.String("config", stonesthrow.GetDefaultConfigFile(), "Configuration file to use.")
@@ -52,6 +54,7 @@ func main() {
 	server := stonesthrow.Server{}
 	reload := false
 
+	stonesthrow.InitializeHostCommands(config)
 	stonesthrow.AddHandler("reload", "Reload and rebuild the server library.",
 		func(ctx context.Context, s *stonesthrow.Session, req stonesthrow.RequestMessage, _ *flag.FlagSet) error {
 			server.Quit()
