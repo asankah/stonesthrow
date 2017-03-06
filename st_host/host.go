@@ -32,7 +32,7 @@ func main() {
 	}
 
 	var config stonesthrow.Config
-	err = config.SelectServerConfig(&configFile, *platform, *repository)
+	err = config.SelectLocalServerConfig(&configFile, *platform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

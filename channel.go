@@ -64,9 +64,7 @@ func (c Channel) NewSendChannel() chan interface{} {
 	channel := make(chan interface{})
 	go func() {
 		for m := range channel {
-			if m != nil {
-				c.Send(m)
-			}
+			c.Send(m)
 		}
 	}()
 

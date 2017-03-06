@@ -38,8 +38,8 @@ func (c *Config) newError(s string, v ...interface{}) error {
 	return ConfigError{ConfigFile: configFile, ErrorString: fmt.Sprintf(s, v...)}
 }
 
-func (c *Config) SelectClientConfig(configFile *ConfigurationFile, serverPlatform string, repository string) error {
-	err := c.SelectServerConfig(configFile, serverPlatform, repository)
+func (c *Config) SelectLocalClientConfig(configFile *ConfigurationFile, serverPlatform string, repository string) error {
+	err := c.SelectLocalServerConfig(configFile, serverPlatform, repository)
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func (c *Config) SelectClientConfig(configFile *ConfigurationFile, serverPlatfor
 // receiver with the values corresponding to |platform| and |repository|.  It
 // returns an error if something went wrong, in which case the state of the
 // receiver is unknown.
-func (c *Config) SelectServerConfig(configFile *ConfigurationFile, platform string, repository string) error {
+func (c *Config) SelectLocalServerConfig(configFile *ConfigurationFile, platform string, repository string) error {
 	c.ConfigurationFile = configFile
 
 	c.PlatformName = platform
@@ -107,6 +107,33 @@ func (c *Config) SelectServerConfig(configFile *ConfigurationFile, platform stri
 	}
 	c.RepositoryName = repository
 
+	return nil
+}
+
+func (c *Config) SelectPeerConfig(configFile *ConfigurationFile, hostname string, repository string) error {
+	c.ConfigurationFile = configFile
+	var ok bool
+	c.Host, ok = configFile.HostsConfig.Hosts[hostname]
+	if !ok {
+		return c.newError("Hostname %s cannot be resolved using %s", hostname, configFile.FileName)
+	}
+
+	c.Repository, ok = c.Host.Repositories[repository]
+	if !ok {
+		return c.newError("Repository %s cannot be resolved using %s", repository, configFile.FileName)
+	}
+
+	c.RepositoryName = c.Repository.Name
+
+	// Unlike a client configuration, a peer configuration uses a non-empty
+	// platform. It is expected that any platform will do since the peer
+	// configuration is only used to access the underlying repository. The
+	// plaform is only used as a means of locating an endpoint.
+	c.Platform = c.Repository.AnyPlatform()
+	if c.Platform == nil {
+		return c.newError("Peer repository for %s on %s doesn't have a usable platform.", repository, hostname)
+	}
+	c.PlatformName = c.Platform.Name
 	return nil
 }
 

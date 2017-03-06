@@ -371,40 +371,71 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 	return err
 }
 
+func (s *Session) resolveBranches(ctx context.Context, branches []string) ([]string, error) {
+	resolvedBranches := []string{}
+	for _, branch := range branches {
+		if branch == "HEAD" {
+			head_branch, err := s.local.Repository.GitCurrentBranch(ctx, s)
+			if err != nil {
+				return nil, err
+			}
+
+			resolvedBranches = append(resolvedBranches, head_branch)
+		} else {
+			resolvedBranches = append(resolvedBranches, branch)
+		}
+	}
+
+	return resolvedBranches, nil
+}
+
 func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) error {
+	branches, err := s.resolveBranches(ctx, branches)
+	if err != nil {
+		return err
+	}
 	if len(branches) == 0 {
 		return InvalidArgumentError
 	}
 
 	localRepository := s.local.Repository
-	var remoteRepository *RepositoryConfig
 
+	var remoteRepository *RepositoryConfig
 	var remoteConfig *Config
-	if s.remote.IsValid() && s.local.Repository.GitConfig.RemoteHost != s.remote.Host {
+
+	if s.remote.IsValid() && s.local.Repository.GitConfig.RemoteHost == s.remote.Host {
+		// The request was sent by the upstream. How convenient.
 		remoteConfig = &s.remote
 		remoteRepository = remoteConfig.Repository
 	} else if s.local.Repository.GitConfig.RemoteHost != nil {
-		remoteHost := s.local.Repository.GitConfig.RemoteHost
-		remoteRepository, ok := remoteHost.Repositories[localRepository.Name]
-		if !ok {
-			return ConfigIncompleteError
+		// We know our remote host. But we'd need to establish a new connection to it.
+		remoteConfig = &Config{}
+		err = remoteConfig.SelectPeerConfig(s.local.ConfigurationFile,
+			s.local.Repository.GitConfig.RemoteHostname,
+			s.local.Repository.Name)
+		if err != nil {
+			return err
 		}
 
-		remoteConfig = &Config{}
-		remoteConfig.SelectServerConfig(s.local.ConfigurationFile,
-			remoteRepository.AnyPlatform().Name, remoteRepository.Name)
+		remoteRepository = remoteConfig.Repository
 	}
 
-	if remoteConfig == nil || remoteRepository == nil || remoteRepository.Name != localRepository.Name {
+	if remoteConfig == nil || remoteRepository == nil {
+		s.channel.Info("Can't determine how to contact repository remote.")
 		return ConfigIncompleteError
 	}
 
+	if localRepository == remoteRepository {
+		s.channel.Info("The local and remote repositories are the same.")
+		return NothingToDoError
+	}
+
 	peerSession := Session{local: s.local, remote: *remoteConfig, channel: s.channel, processAdder: s.processAdder}
-	err := peerSession.SendRemoteRequest(RequestMessage{
-		Command:        "__prepare_for_git_push__",
-		Repository:     remoteConfig.Repository.Name,
-		SourcePlatform: s.local.Platform.Name,
-		SourceHostname: s.local.Host.Name})
+	err = peerSession.SendRequestToRemoteServer(
+		RequestMessage{
+			Command:        "__prepare_for_git_push__",
+			Repository:     remoteConfig.Repository.Name,
+			SourceHostname: s.local.Host.Name})
 	if err != nil {
 		return err
 	}
@@ -415,20 +446,28 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 	}
 
 	branchConfigs, err := s.local.Repository.GitGetBranchConfig(ctx, s, branches,
-		append(localRepository.GitConfig.BranchProperties,
-			remoteRepository.GitConfig.BranchProperties...))
+		append(localRepository.GitConfig.SyncableProperties,
+			remoteRepository.GitConfig.SyncableProperties...))
 	if err != nil {
 		return err
 	}
 
-	return s.SendRemoteRequest(RequestMessage{
-		Command:        "__accept_branch_config__",
-		Repository:     remoteConfig.Repository.Name,
-		SourcePlatform: s.local.Platform.Name,
-		SourceHostname: s.local.Host.Name,
-		BranchConfigs:  branchConfigs})
+	return peerSession.SendRequestToRemoteServer(
+		RequestMessage{
+			Command:        "__accept_branch_config__",
+			Repository:     remoteConfig.Repository.Name,
+			SourceHostname: s.local.Host.Name,
+			BranchConfigs:  branchConfigs})
 }
 
-func (s *Session) SendRemoteRequest(request RequestMessage) error {
-	return ExecuteRequest(s, s.local, s.remote, request, s.channel.NewSendChannel())
+func (s *Session) SendRequestToRemoteServer(request RequestMessage) error {
+	if s.local.Host == s.remote.Host {
+		s.channel.Error("Local and remote hosts are the same. Skipping remote request.")
+		return NothingToDoError
+	}
+	s.channel.Info(fmt.Sprintf("Sending %s request to remote server %s", request.Command, s.remote.Host.Name))
+	return SendRequestToRemoteServer(s, s.local, s.remote, request,
+		s.channel.NewSendChannel())
+	s.channel.Info("Done")
+	return nil
 }

@@ -39,7 +39,7 @@ func runClientWithReaderWriter(
 
 		requestMessage, ok := response.(*RequestMessage)
 		if ok {
-			DispatchRequest(context.Background(), &reverseClientSession, *requestMessage)
+			HandleRequestOnLocalHost(context.Background(), &reverseClientSession, *requestMessage)
 		} else {
 			handler <- response
 		}
@@ -106,7 +106,7 @@ func runLocallyWithoutServer(serverConfig Config, request RequestMessage, handle
 	connection := localStaticConnection{ResponseSink: handler}
 	channel := Channel{conn: connection}
 	session := Session{local: serverConfig, remote: serverConfig, channel: channel, processAdder: nil}
-	DispatchRequest(context.Background(), &session, request)
+	HandleRequestOnLocalHost(context.Background(), &session, request)
 	return nil
 }
 
@@ -160,10 +160,10 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 		}
 	}
 
-	if sshTarget.SshHostName == "" {
-		sshTarget.SshHostName = sshTarget.HostName
+	if sshTarget.SshConfigName == "" {
+		sshTarget.SshConfigName = sshTarget.HostName
 	}
-	sshCommand := []string{sshTarget.SshHostName, "-T",
+	sshCommand := []string{sshTarget.SshConfigName, "-T",
 		filepath.Join(serverConfig.Host.StonesthrowPath, "st_client"),
 		"--server", serverConfig.PlatformName,
 		"--repository", serverConfig.RepositoryName,
@@ -184,7 +184,7 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 	return runClientWithReaderWriter(clientConfig, serverConfig, request, handler, readEnd, writeEnd)
 }
 
-func ExecuteRequest(e Executor, clientConfig Config, serverConfig Config, request RequestMessage,
+func SendRequestToRemoteServer(e Executor, clientConfig Config, serverConfig Config, request RequestMessage,
 	handler chan interface{}) error {
 	defer close(handler)
 

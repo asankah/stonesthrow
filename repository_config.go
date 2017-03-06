@@ -9,10 +9,10 @@ import (
 )
 
 type RepositoryGitConfig struct {
-	BranchProperties []string    `json:"branch_properties,omitempty"`
-	Remote           string      `json:"remote,omitempty"`
-	RemoteHostname   string      `json:"hostname,omitempty"`
-	RemoteHost       *HostConfig `json:"-"`
+	SyncableProperties []string    `json:"syncable_properties,omitempty"`
+	Remote             string      `json:"remote,omitempty"`
+	RemoteHostname     string      `json:"hostname,omitempty"`
+	RemoteHost         *HostConfig `json:"-"`
 }
 
 type RepositoryConfig struct {
@@ -310,7 +310,7 @@ func (r *RepositoryConfig) GitGetBranchConfig(ctx context.Context, e Executor,
 			return nil, fmt.Errorf("Unknown branch %s", branch)
 		}
 
-		c := &BranchConfig{Name: branch, Revision: revision}
+		c := &BranchConfig{Name: branch, Revision: revision, GitConfig: make(map[string]string)}
 		branchSet[branch] = c
 	}
 

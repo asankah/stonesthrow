@@ -24,6 +24,7 @@ var (
 	WorkTreeDirtyError             = errors.New("working directory is dirty")
 	FailedToPushGitBranchError     = errors.New("failed to push git branch")
 	EndpointNotFoundError          = errors.New("endpoint not found")
+	NothingToDoError               = errors.New("nothing to do")
 )
 
 type ConfigError struct {

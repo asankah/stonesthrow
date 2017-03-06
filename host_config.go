@@ -5,8 +5,8 @@ import (
 )
 
 type SshTarget struct {
-	HostName    string `json:"host"`
-	SshHostName string `json:"ssh_host"`
+	HostName      string `json:"host"`
+	SshConfigName string `json:"ssh_config"`
 
 	Host *HostConfig `json:"-"`
 }

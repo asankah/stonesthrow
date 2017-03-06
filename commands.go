@@ -320,7 +320,7 @@ func GetHandlerForCommand(command string) (*CommandHandler, bool) {
 	return handler, ok
 }
 
-func DispatchRequest(c context.Context, s *Session, req RequestMessage) {
+func HandleRequestOnLocalHost(c context.Context, s *Session, req RequestMessage) {
 	arguments := []string{req.Command}
 	arguments = append(arguments, req.Arguments...)
 

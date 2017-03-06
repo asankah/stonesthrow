@@ -84,7 +84,6 @@ type RequestMessage struct {
 	Arguments      []string       `json:"args,omitempty"`
 	Repository     string         `json:"repo,omitempty"`
 	Revision       string         `json:"revision,omitempty"`
-	SourcePlatform string         `json:"source_platform,omitempty"`
 	SourceHostname string         `json:"source_hostname,omitempty"`
 	BranchConfigs  []BranchConfig `json:"branch_config,omitempty"`
 }

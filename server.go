@@ -249,17 +249,23 @@ func (s *Server) runSessionWithConnection(ctx context.Context, c io.ReadWriter, 
 		CancelFunc: cancelFunc}
 
 	var remoteConfig Config
-	remoteConfig.SelectServerConfig(s.local.ConfigurationFile, req.SourcePlatform, req.Repository)
+	err = remoteConfig.SelectPeerConfig(s.local.ConfigurationFile, req.SourceHostname, s.local.RepositoryName)
+	if err != nil {
+		// Try to continue with this error.
+		log.Printf("Can't determine peer configuration for hostname: %s and repository: %s",
+			req.SourceHostname, s.local.RepositoryName)
+	}
 
 	s.sessionTracker.AddSession(&sessionInfo)
 
-	sessionInfo.Session = &Session{local: s.local,
+	sessionInfo.Session = &Session{
+		local:        s.local,
 		remote:       remoteConfig,
 		channel:      channel,
 		processAdder: s.sessionTracker.GetSessionProcessAdder(&sessionInfo)}
 
 	log.Printf("Dispatching request %s", req.Command)
-	DispatchRequest(ctx, sessionInfo.Session, *req)
+	HandleRequestOnLocalHost(ctx, sessionInfo.Session, *req)
 	log.Printf("Done with request %s", req.Command)
 
 	s.sessionTracker.RemoveSession(&sessionInfo)

@@ -43,12 +43,12 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	err = serverConfig.SelectServerConfig(&configFile, *serverPlatform, *repository)
+	err = serverConfig.SelectLocalServerConfig(&configFile, *serverPlatform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	err = clientConfig.SelectClientConfig(&configFile, *serverPlatform, *repository)
+	err = clientConfig.SelectLocalClientConfig(&configFile, *serverPlatform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -56,7 +56,8 @@ func main() {
 	if *passthrough {
 		err = stonesthrow.RunPassthroughClient(clientConfig, serverConfig)
 		if err != nil {
-			log.Fatalf("Client failed : %#v", err)
+			log.Fatalf("Passthrough client failed : %#v, \nWhile attempting to contact: %s from %s",
+				err, serverConfig.Host.Name, clientConfig.Host.Name)
 		}
 		return
 	}
@@ -121,7 +122,7 @@ func main() {
 		done <- 0
 	}()
 
-	err = stonesthrow.ExecuteRequest(executor, clientConfig, serverConfig, req, output)
+	err = stonesthrow.SendRequestToRemoteServer(executor, clientConfig, serverConfig, req, output)
 	if err != nil {
 		log.Fatalf("Client failed: %#v", err)
 	}
