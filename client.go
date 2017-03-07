@@ -165,7 +165,7 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 		sshTarget.SshConfigName = sshTarget.HostName
 	}
 	sshCommand := []string{sshTarget.SshConfigName, "-T",
-		filepath.Join(serverConfig.Host.StonesthrowPath, "st_client"),
+		filepath.Join(sshTarget.Host.StonesthrowPath, "st_client"),
 		"--server", serverConfig.PlatformName,
 		"--repository", serverConfig.RepositoryName,
 		"--passthrough"}
@@ -207,6 +207,15 @@ func SendRequestToRemoteServer(e Executor, clientConfig Config, serverConfig Con
 		if sshTarget.Host == serverConfig.Host {
 			return runViaSshPassThrough(e, sshTarget, clientConfig, serverConfig,
 				request, handler)
+		}
+	}
+
+	for _, sshTarget := range clientConfig.Host.SshTargets {
+		for _, endpoint := range serverConfig.Platform.Endpoints {
+			if endpoint.Host == sshTarget.Host {
+				return runViaSshPassThrough(e, sshTarget, clientConfig, serverConfig,
+					request, handler)
+			}
 		}
 	}
 

@@ -2,6 +2,7 @@ package stonesthrow
 
 import (
 	"fmt"
+	"strings"
 )
 
 type SshTarget struct {
@@ -57,6 +58,20 @@ func (h *HostConfig) SupportsPlatform(platform string) bool {
 	for _, r := range h.Repositories {
 		_, ok := r.Platforms[platform]
 		if ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (h *HostConfig) IsSameHost(hostname string) bool {
+	if strings.EqualFold(hostname, h.Name) {
+		return true
+	}
+
+	for _, alias := range h.Alias {
+		if strings.EqualFold(hostname, alias) {
 			return true
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -82,6 +83,15 @@ func (r *RepositoryConfig) GitRevision(ctx context.Context, e Executor, name str
 	return r.RunHere(ctx, e, "git", "rev-parse", name)
 }
 
+func (r *RepositoryConfig) GitTreeForRevision(ctx context.Context, e Executor, name string) (string, error) {
+	if runtime.GOOS == "windows" {
+		return r.RunHere(ctx, e, "git", "rev-parse", fmt.Sprintf("\"%s^^^^{tree}\"", name))
+	} else {
+		return r.RunHere(ctx, e, "git", "rev-parse", fmt.Sprintf("%s^{tree}", name))
+	}
+}
+
+// GitCreateWorkTree takes a snapshot of the working set of files, and returns a Git tree ID.
 func (r *RepositoryConfig) GitCreateWorkTree(ctx context.Context, e Executor) (string, error) {
 	status, err := r.GitStatus(ctx, e)
 	if err != nil {
@@ -93,7 +103,7 @@ func (r *RepositoryConfig) GitCreateWorkTree(ctx context.Context, e Executor) (s
 	}
 
 	if !status.HasModified {
-		return r.GitRevision(ctx, e, "HEAD^{tree}")
+		return r.GitTreeForRevision(ctx, e, "HEAD")
 	}
 
 	_, err = r.RunHere(ctx, e, "git", "add", "-u")
@@ -123,13 +133,13 @@ func (r *RepositoryConfig) GitCreateBuilderHead(ctx context.Context, e Executor)
 			return "", err
 		}
 	} else {
-		tree, err = r.GitRevision(ctx, e, "HEAD^{tree}")
+		tree, err = r.GitTreeForRevision(ctx, e, "HEAD")
 		if err != nil {
 			return "", err
 		}
 	}
 
-	builderTree, err := r.GitRevision(ctx, e, "BUILDER_HEAD^{tree}")
+	builderTree, err := r.GitTreeForRevision(ctx, e, "BUILDER_HEAD")
 	if err != nil || builderTree != tree {
 		headCommit, err := r.GitRevision(ctx, e, "HEAD")
 		if err != nil {
@@ -224,7 +234,7 @@ func (r *RepositoryConfig) GitCheckoutRevision(ctx context.Context, e Executor, 
 	if err != nil {
 		return err
 	}
-	targetWorkTree, err := r.GitRevision(ctx, e, fmt.Sprintf("%s^{tree}", targetRevision))
+	targetWorkTree, err := r.GitTreeForRevision(ctx, e, targetRevision)
 	if err == nil && currentWorkTree == targetWorkTree {
 		return nil
 	}

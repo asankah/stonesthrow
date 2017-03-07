@@ -96,9 +96,11 @@ var DefaultHandlers = []CommandHandler{
 		"build",
 		`Build specified targets.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
-			err := s.SyncWorkdir(ctx, req.Revision)
-			if err != nil {
-				return err
+			if !s.local.Host.IsSameHost(req.SourceHostname) {
+				err := s.SyncWorkdir(ctx, req.Revision)
+				if err != nil {
+					return err
+				}
 			}
 			return s.BuildTargets(ctx, req.Arguments...)
 		},
