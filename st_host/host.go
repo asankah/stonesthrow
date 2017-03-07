@@ -60,7 +60,7 @@ func main() {
 			server.Quit()
 			reload = true
 			return nil
-		})
+		}, stonesthrow.NO_REVISION)
 
 	err = server.Run(config)
 	if err != nil {

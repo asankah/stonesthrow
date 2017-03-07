@@ -24,9 +24,10 @@ func runClientWithReaderWriter(
 
 	channel := Channel{conn: wrappedConn}
 
+	reverseClientChannel := Channel{conn: localStaticConnection{ResponseSink: handler}}
 	reverseClientSession := Session{
 		local: clientConfig, remote: serverConfig,
-		channel: channel, processAdder: nil}
+		channel: reverseClientChannel, processAdder: nil}
 
 	for {
 		response, err := channel.Receive()

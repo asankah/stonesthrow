@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 )
@@ -312,10 +311,6 @@ func (r *RepositoryConfig) GitGetBranchConfig(ctx context.Context, e Executor,
 			branchSet[branch] = &BranchConfig{Name: branch, GitConfig: make(map[string]string)}
 		}
 	}
-	log.Printf("GitGetBranchConfig: branches: %#v\nproperties: %#v\n", branches, properties)
-	if includeAllBranches {
-		log.Println("Including all branches")
-	}
 
 	allPropertiesString, err := r.RunHere(ctx, e, "git", "config", "--local", "-z", "--get-regex", "^branch\\..*")
 	if err != nil {
@@ -356,15 +351,14 @@ func (r *RepositoryConfig) GitGetBranchConfig(ctx context.Context, e Executor,
 			continue
 		}
 
-		log.Printf("{%s} = {%s} for {%s}", namefields[2], value, c.Name)
 		c.GitConfig[namefields[2]] = value
 	}
 
 	for _, c := range branchSet {
 		revision, err := r.RunHere(ctx, e, "git", "rev-parse", c.Name)
 		if err != nil {
-			log.Printf("Unknown branch %s", c.Name)
-			return nil, fmt.Errorf("Unknown branch %s", c.Name)
+			delete(branchSet, c.Name)
+			continue
 		}
 		c.Revision = revision
 	}
@@ -374,7 +368,6 @@ func (r *RepositoryConfig) GitGetBranchConfig(ctx context.Context, e Executor,
 		configs = append(configs, *c)
 	}
 
-	log.Printf("Returning %#v\n", configs)
 	return configs, nil
 }
 

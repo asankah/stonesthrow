@@ -206,10 +206,17 @@ var DefaultHandlers = []CommandHandler{
 	CommandHandler{"__apply_branch_config__", "", "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.local.Repository.GitSetBranchConfig(ctx, s, req.BranchConfigs)
-		}, NO_REVISION, HIDE_FROM_HELP}}
+		}, NO_REVISION, HIDE_FROM_HELP},
 
-func AddHandler(command string, doc string, handler RequestHandler) {
-	newHandler := CommandHandler{command, doc, "", nil, handler, NO_REVISION, SHOW_IN_HELP}
+	// Placeholder commands.
+	CommandHandler{"ru", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP},
+	CommandHandler{"reload", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP},
+	CommandHandler{"quit", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP},
+	CommandHandler{"jobs", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP},
+	CommandHandler{"kill", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP}}
+
+func AddHandler(command string, doc string, handler RequestHandler, needsRevision NeedsRevision) {
+	newHandler := CommandHandler{command, doc, "", nil, handler, needsRevision, SHOW_IN_HELP}
 	handlerMap[newHandler.name] = &newHandler
 	commander.Register(newHandler, "")
 }
@@ -286,7 +293,7 @@ func InitializeCommands() {
 		handlerMap[handler.name] = &DefaultHandlers[idx]
 	}
 
-	AddHandler("help", `Does what you think it does`, handleHelp)
+	AddHandler("help", `Does what you think it does`, handleHelp, NO_REVISION)
 }
 
 func InitializeHostCommands(localConfig Config) {
@@ -298,12 +305,12 @@ func InitializeHostCommands(localConfig Config) {
 					fetch = false
 				}
 				return s.GitRebaseUpdate(ctx, fetch)
-			})
+			}, NO_REVISION)
 	} else {
 		AddHandler("sync_workdir", `Synchronize remote work directory with local.`,
 			func(ctx context.Context, s *Session, req RequestMessage, _ *flag.FlagSet) error {
 				return s.SyncWorkdir(ctx, req.Revision)
-			})
+			}, NEEDS_REVISION)
 	}
 
 	allTestTargets, err := localConfig.Platform.GetAllTargets(true)

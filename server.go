@@ -292,16 +292,16 @@ func (s *Server) Run(local Config) error {
 		func(_ context.Context, sess *Session, req RequestMessage, _ *flag.FlagSet) error {
 			s.listJobsHandler(sess, req)
 			return nil
-		})
+		}, NO_REVISION)
 	AddHandler("killall", "Kill all child processes",
 		func(_ context.Context, sess *Session, req RequestMessage, _ *flag.FlagSet) error {
 			s.killProcessHandler(sess, req)
 			return nil
-		})
-	AddHandler("quit", "Quit server", nil)
+		}, NO_REVISION)
+	AddHandler("quit", "Quit server", nil, NO_REVISION)
 	AddHandler("join", `Join a running job.
 
-The ID of the job should be specified as the only argument. Any new processes started by the job will use the newly established channel for IO. Use 'jobs' to find the job ID for a long running command.`, nil)
+The ID of the job should be specified as the only argument. Any new processes started by the job will use the newly established channel for IO. Use 'jobs' to find the job ID for a long running command.`, nil, NO_REVISION)
 	if !local.IsValid() {
 		return ConfigIncompleteError
 	}
