@@ -152,8 +152,7 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 	request RequestMessage, handler chan interface{}) error {
 
 	ctx := context.Background()
-	commandHandler, ok := GetHandlerForCommand(request.Command)
-	if !ok || commandHandler.needsRevision == NEEDS_REVISION {
+	if CommandNeedsRevision(request.Command) {
 		// Passthrough requires that the server already have the correct BUILDER_HEAD.
 		err := clientConfig.Repository.GitPushBuilderHead(ctx, e)
 		if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"github.com/google/subcommands"
+	"io"
 	"sync"
 )
 
@@ -76,8 +77,6 @@ func (h CommandHandler) NeedsRevision() bool {
 }
 
 var (
-	flagset            *flag.FlagSet
-	commander          *subcommands.Commander
 	handlerMap         map[string]*CommandHandler
 	initOnce           sync.Once
 	initConfigHandlers sync.Once
@@ -217,14 +216,12 @@ var DefaultHandlers = []CommandHandler{
 func AddHandler(command string, doc string, handler RequestHandler, needsRevision NeedsRevision) {
 	newHandler := CommandHandler{command, doc, "", nil, handler, needsRevision, SHOW_IN_HELP}
 	handlerMap[newHandler.name] = &newHandler
-	commander.Register(newHandler, "")
 }
 
 func AddTestHandler(command string, handler RequestHandler) {
 	newHandler := CommandHandler{command, "Runs the specific test target.", "",
 		nil, handler, NEEDS_REVISION, HIDE_FROM_HELP}
 	handlerMap[newHandler.name] = &newHandler
-	commander.Register(newHandler, "test")
 }
 
 func handleHelp(ctx context.Context, s *Session, _ RequestMessage, _ *flag.FlagSet) error {
@@ -283,12 +280,9 @@ func handleList(ctx context.Context, s *Session, req RequestMessage, f *flag.Fla
 }
 
 func InitializeCommands() {
-	flagset = flag.NewFlagSet("", flag.ContinueOnError)
-	commander = subcommands.NewCommander(flagset, "")
 	handlerMap = make(map[string]*CommandHandler)
 
 	for idx, handler := range DefaultHandlers {
-		commander.Register(handler, "")
 		handlerMap[handler.name] = &DefaultHandlers[idx]
 	}
 
@@ -326,11 +320,6 @@ func InitializeHostCommands(localConfig Config) {
 	}
 }
 
-func GetHandlerForCommand(command string) (*CommandHandler, bool) {
-	handler, ok := handlerMap[command]
-	return handler, ok
-}
-
 var (
 	CommandsThatDontNeedARevision = map[string]bool{
 		"ru":     true,
@@ -343,7 +332,7 @@ var (
 )
 
 func CommandNeedsRevision(command string) bool {
-	commandHandler, ok := GetHandlerForCommand(command)
+	commandHandler, ok := handlerMap[command]
 	if !ok {
 		_, ok := CommandsThatDontNeedARevision[command]
 		return !ok
@@ -354,6 +343,25 @@ func CommandNeedsRevision(command string) bool {
 func HandleRequestOnLocalHost(c context.Context, s *Session, req RequestMessage) {
 	arguments := []string{req.Command}
 	arguments = append(arguments, req.Arguments...)
+	flagset := flag.NewFlagSet("", flag.ContinueOnError)
+
+	stdoutPipeReader, stdoutPipeWriter := io.Pipe()
+	stderrPipeReader, stderrPipeWriter := io.Pipe()
+	quitter := make(chan int)
+
+	go func() {
+		s.channel.Stream(stdoutPipeReader)
+		quitter <- 1
+	}()
+	go func() {
+		s.channel.Stream(stderrPipeReader)
+		quitter <- 1
+	}()
+
+	commander := subcommands.NewCommander(flagset, "st_client")
+	for _, handler := range handlerMap {
+		commander.Register(*handler, "")
+	}
 
 	err := flagset.Parse(arguments)
 	if err != nil {
@@ -361,5 +369,15 @@ func HandleRequestOnLocalHost(c context.Context, s *Session, req RequestMessage)
 		return
 	}
 
+	commander.Error = stderrPipeWriter
+	commander.Output = stdoutPipeWriter
+
 	commander.Execute(c, s, req)
+
+	stdoutPipeReader.Close()
+	stdoutPipeWriter.Close()
+	stderrPipeReader.Close()
+	stderrPipeWriter.Close()
+	<-quitter
+	<-quitter
 }
