@@ -53,6 +53,10 @@ func (h CommandHandler) SetFlags(f *flag.FlagSet) {
 }
 
 func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	if h.handler == nil {
+		return subcommands.ExitFailure
+	}
+
 	session := args[0].(*Session)
 	request := args[1].(RequestMessage)
 
@@ -206,14 +210,7 @@ var DefaultHandlers = []CommandHandler{
 	CommandHandler{"__apply_branch_config__", "", "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.local.Repository.GitSetBranchConfig(ctx, s, req.BranchConfigs)
-		}, NO_REVISION, HIDE_FROM_HELP},
-
-	// Placeholder commands.
-	CommandHandler{"ru", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP},
-	CommandHandler{"reload", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP},
-	CommandHandler{"quit", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP},
-	CommandHandler{"jobs", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP},
-	CommandHandler{"kill", "", "", nil, nil, NO_REVISION, HIDE_FROM_HELP}}
+		}, NO_REVISION, HIDE_FROM_HELP}}
 
 func AddHandler(command string, doc string, handler RequestHandler, needsRevision NeedsRevision) {
 	newHandler := CommandHandler{command, doc, "", nil, handler, needsRevision, SHOW_IN_HELP}
@@ -330,6 +327,26 @@ func InitializeHostCommands(localConfig Config) {
 func GetHandlerForCommand(command string) (*CommandHandler, bool) {
 	handler, ok := handlerMap[command]
 	return handler, ok
+}
+
+var (
+	CommandsThatDontNeedARevision = map[string]bool{
+		"ru":     true,
+		"quit":   true,
+		"reload": true,
+		"jobs":   true,
+		"kill":   true,
+		"join":   true,
+		"help":   true}
+)
+
+func CommandNeedsRevision(command string) bool {
+	commandHandler, ok := GetHandlerForCommand(command)
+	if !ok {
+		_, ok := CommandsThatDontNeedARevision[command]
+		return !ok
+	}
+	return commandHandler.NeedsRevision()
 }
 
 func HandleRequestOnLocalHost(c context.Context, s *Session, req RequestMessage) {
