@@ -371,7 +371,7 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 	return err
 }
 
-func (s *Session) resolveBranches(ctx context.Context, branches []string) ([]string, error) {
+func (s *Session) resolveLocalBranches(ctx context.Context, branches []string) ([]string, error) {
 	resolvedBranches := []string{}
 	for _, branch := range branches {
 		if branch == "HEAD" {
@@ -390,7 +390,7 @@ func (s *Session) resolveBranches(ctx context.Context, branches []string) ([]str
 }
 
 func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) error {
-	branches, err := s.resolveBranches(ctx, branches)
+	branches, err := s.resolveLocalBranches(ctx, branches)
 	if err != nil {
 		return err
 	}
@@ -466,9 +466,8 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 }
 
 func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) error {
-	branches, err := s.resolveBranches(ctx, branches)
-	if err != nil {
-		return err
+	if len(branches) == 1 && branches[0] == "*" {
+		branches[0] = "refs/heads/*"
 	}
 	if len(branches) == 0 {
 		return InvalidArgumentError
@@ -478,6 +477,7 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 
 	var remoteRepository *RepositoryConfig
 	var remoteConfig *Config
+	var err error
 
 	if s.remote.IsValid() && s.local.Repository.GitConfig.RemoteHost == s.remote.Host {
 		// The request was sent by the upstream. How convenient.
@@ -507,7 +507,9 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 	}
 
 	err = s.local.Repository.CheckHere(ctx, s, "git", "checkout", "--detach", "origin/master")
-	peerSession := Session{local: s.local, remote: *remoteConfig, channel: s.channel, processAdder: s.processAdder}
+	if err != nil {
+		return err
+	}
 	err = s.local.Repository.GitFetch(ctx, s, branches)
 	if err != nil {
 		return err
@@ -522,16 +524,27 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 	for _, branch := range branches {
 		branchConfigs = append(branchConfigs, BranchConfig{Name: branch, GitConfig: gitConfig})
 	}
-	return peerSession.SendRequestToRemoteServer(
+
+	peerSession := Session{local: s.local, remote: *remoteConfig, channel: s.channel, processAdder: s.processAdder}
+	err = peerSession.SendRequestToRemoteServer(
 		RequestMessage{
 			Command:        "__get_branch_config__",
 			Repository:     remoteConfig.Repository.Name,
 			SourceHostname: s.local.Host.Name,
 			BranchConfigs:  branchConfigs})
+	if err != nil {
+		return err
+	}
+
+	if len(branches) == 1 {
+		return s.local.Repository.GitCheckoutRevision(ctx, s, branches[0])
+	}
+	return nil
 }
 
 func (s *Session) SendBranchConfigToCaller(ctx context.Context, configs []BranchConfig) error {
-	for idx, config := range configs {
+	configsToReturn := []BranchConfig{}
+	for _, config := range configs {
 		properties := []string{}
 		for property, _ := range config.GitConfig {
 			properties = append(properties, property)
@@ -540,13 +553,13 @@ func (s *Session) SendBranchConfigToCaller(ctx context.Context, configs []Branch
 		if err != nil {
 			return err
 		}
-		configs[idx] = t[0]
+		configsToReturn = append(configsToReturn, t...)
 	}
 	return s.channel.Send(RequestMessage{
 		Command:        "__apply_branch_config__",
 		Repository:     s.local.Repository.Name,
 		SourceHostname: s.local.Host.Name,
-		BranchConfigs:  configs})
+		BranchConfigs:  configsToReturn})
 }
 
 func (s *Session) SendRequestToRemoteServer(request RequestMessage) error {

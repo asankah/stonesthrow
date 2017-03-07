@@ -155,21 +155,21 @@ var DefaultHandlers = []CommandHandler{
 	CommandHandler{"pull",
 		`Pull a specific branch from upstream.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
-			if len(req.Arguments) != 1 {
+			if len(req.Arguments) == 0 {
 				s.channel.Error("Need to specify branch")
 				return InvalidArgumentError
 			}
-			err := s.local.Repository.GitFetch(ctx, s, []string{req.Arguments[0]})
-			if err != nil {
-				return err
-			}
-			return s.local.Repository.GitCheckoutRevision(ctx, s, req.Arguments[0])
+			return s.GitFetchFromUpstream(ctx, req.Arguments)
 		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{"push",
-		`Push the current branch to upstream.`, "", nil,
+		`Push local branches upstream.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
-			return s.GitPushToUpstream(ctx, []string{"HEAD"})
+			branches := req.Arguments
+			if len(branches) == 0 {
+				branches = []string{"HEAD"}
+			}
+			return s.GitPushToUpstream(ctx, branches)
 		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{"status",

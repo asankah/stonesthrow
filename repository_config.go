@@ -305,14 +305,11 @@ func (r *RepositoryConfig) GitGetBranchConfig(ctx context.Context, e Executor,
 	}
 
 	branchSet := make(map[string]*BranchConfig)
-	for _, branch := range branches {
-		revision, err := r.RunHere(ctx, e, "git", "rev-parse", branch)
-		if err != nil {
-			return nil, fmt.Errorf("Unknown branch %s", branch)
+	includeAllBranches := (len(branches) == 1 && branches[0] == "refs/heads/*")
+	if !includeAllBranches {
+		for _, branch := range branches {
+			branchSet[branch] = &BranchConfig{Name: branch, GitConfig: make(map[string]string)}
 		}
-
-		c := &BranchConfig{Name: branch, Revision: revision, GitConfig: make(map[string]string)}
-		branchSet[branch] = c
 	}
 
 	allPropertiesString, err := r.RunHere(ctx, e, "git", "config", "--local", "-z", "--get-regex", "^branch\\..*")
@@ -341,7 +338,12 @@ func (r *RepositoryConfig) GitGetBranchConfig(ctx context.Context, e Executor,
 
 		c, ok := branchSet[namefields[1]]
 		if !ok {
-			continue
+			if includeAllBranches {
+				c = &BranchConfig{Name: namefields[1], GitConfig: make(map[string]string)}
+				branchSet[namefields[1]] = c
+			} else {
+				continue
+			}
 		}
 
 		_, ok = propertySet[namefields[2]]
@@ -352,8 +354,15 @@ func (r *RepositoryConfig) GitGetBranchConfig(ctx context.Context, e Executor,
 		c.GitConfig[namefields[2]] = value
 	}
 
-	configs := []BranchConfig{}
+	for _, c := range branchSet {
+		revision, err := r.RunHere(ctx, e, "git", "rev-parse", c.Name)
+		if err != nil {
+			return nil, fmt.Errorf("Unknown branch %s", c.Name)
+		}
+		c.Revision = revision
+	}
 
+	configs := []BranchConfig{}
 	for _, c := range branchSet {
 		configs = append(configs, *c)
 	}
