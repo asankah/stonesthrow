@@ -2,11 +2,11 @@ package stonesthrow
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 )
 
 func runClientWithReaderWriter(
@@ -165,7 +165,7 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 		sshTarget.SshConfigName = sshTarget.HostName
 	}
 	sshCommand := []string{sshTarget.SshConfigName, "-T",
-		filepath.Join(sshTarget.Host.StonesthrowPath, "st_client"),
+		fmt.Sprintf("%s/%s", sshTarget.Host.StonesthrowPath, "st_client"),
 		"--server", serverConfig.PlatformName,
 		"--repository", serverConfig.RepositoryName,
 		"--passthrough"}
