@@ -198,7 +198,12 @@ var DefaultHandlers = []CommandHandler{
 
 		}, NO_REVISION, HIDE_FROM_HELP},
 
-	CommandHandler{"__accept_branch_config__", "", "", nil,
+	CommandHandler{"__get_branch_config__", "", "", nil,
+		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
+			return s.SendBranchConfigToCaller(ctx, req.BranchConfigs)
+		}, NO_REVISION, HIDE_FROM_HELP},
+
+	CommandHandler{"__apply_branch_config__", "", "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
 			return s.local.Repository.GitSetBranchConfig(ctx, s, req.BranchConfigs)
 		}, NO_REVISION, HIDE_FROM_HELP}}

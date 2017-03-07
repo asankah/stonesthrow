@@ -459,10 +459,94 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 
 	return peerSession.SendRequestToRemoteServer(
 		RequestMessage{
-			Command:        "__accept_branch_config__",
+			Command:        "__apply_branch_config__",
 			Repository:     remoteConfig.Repository.Name,
 			SourceHostname: s.local.Host.Name,
 			BranchConfigs:  branchConfigs})
+}
+
+func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) error {
+	branches, err := s.resolveBranches(ctx, branches)
+	if err != nil {
+		return err
+	}
+	if len(branches) == 0 {
+		return InvalidArgumentError
+	}
+
+	localRepository := s.local.Repository
+
+	var remoteRepository *RepositoryConfig
+	var remoteConfig *Config
+
+	if s.remote.IsValid() && s.local.Repository.GitConfig.RemoteHost == s.remote.Host {
+		// The request was sent by the upstream. How convenient.
+		remoteConfig = &s.remote
+		remoteRepository = remoteConfig.Repository
+	} else if s.local.Repository.GitConfig.RemoteHost != nil {
+		// We know our remote host. But we'd need to establish a new connection to it.
+		remoteConfig = &Config{}
+		err = remoteConfig.SelectPeerConfig(s.local.ConfigurationFile,
+			s.local.Repository.GitConfig.RemoteHostname,
+			s.local.Repository.Name)
+		if err != nil {
+			return err
+		}
+
+		remoteRepository = remoteConfig.Repository
+	}
+
+	if remoteConfig == nil || remoteRepository == nil {
+		s.channel.Info("Can't determine how to contact repository remote.")
+		return ConfigIncompleteError
+	}
+
+	if localRepository == remoteRepository {
+		s.channel.Info("The local and remote repositories are the same.")
+		return NothingToDoError
+	}
+
+	err = s.local.Repository.CheckHere(ctx, s, "git", "checkout", "--detach", "origin/master")
+	peerSession := Session{local: s.local, remote: *remoteConfig, channel: s.channel, processAdder: s.processAdder}
+	err = s.local.Repository.GitFetch(ctx, s, branches)
+	if err != nil {
+		return err
+	}
+
+	branchConfigs := []BranchConfig{}
+	allProperties := append(localRepository.GitConfig.SyncableProperties, remoteRepository.GitConfig.SyncableProperties...)
+	gitConfig := make(map[string]string)
+	for _, property := range allProperties {
+		gitConfig[property] = "?"
+	}
+	for _, branch := range branches {
+		branchConfigs = append(branchConfigs, BranchConfig{Name: branch, GitConfig: gitConfig})
+	}
+	return peerSession.SendRequestToRemoteServer(
+		RequestMessage{
+			Command:        "__get_branch_config__",
+			Repository:     remoteConfig.Repository.Name,
+			SourceHostname: s.local.Host.Name,
+			BranchConfigs:  branchConfigs})
+}
+
+func (s *Session) SendBranchConfigToCaller(ctx context.Context, configs []BranchConfig) error {
+	for idx, config := range configs {
+		properties := []string{}
+		for property, _ := range config.GitConfig {
+			properties = append(properties, property)
+		}
+		t, err := s.local.Repository.GitGetBranchConfig(ctx, s, []string{config.Name}, properties)
+		if err != nil {
+			return err
+		}
+		configs[idx] = t[0]
+	}
+	return s.channel.Send(RequestMessage{
+		Command:        "__apply_branch_config__",
+		Repository:     s.local.Repository.Name,
+		SourceHostname: s.local.Host.Name,
+		BranchConfigs:  configs})
 }
 
 func (s *Session) SendRequestToRemoteServer(request RequestMessage) error {

@@ -2,7 +2,6 @@ package stonesthrow
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"os"
 )
