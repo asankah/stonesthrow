@@ -466,7 +466,7 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 }
 
 func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) error {
-	if len(branches) == 1 && branches[0] == "*" {
+	if len(branches) == 1 && branches[0] == "all" {
 		branches[0] = "refs/heads/*"
 	}
 	if len(branches) == 0 {
@@ -536,7 +536,7 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 		return err
 	}
 
-	if len(branches) == 1 {
+	if len(branches) == 1 && branches[0] != "refs/heads/*" {
 		return s.local.Repository.GitCheckoutRevision(ctx, s, branches[0])
 	}
 	return nil
