@@ -100,9 +100,6 @@ func main() {
 	req.Repository = *repository
 	req.SourceHostname = clientConfig.Host.Name
 	if serverConfig.Host != clientConfig.Host && stonesthrow.CommandNeedsRevision(req.Command) {
-		if serverConfig.Repository.GitConfig.RemoteHost != clientConfig.Host {
-			log.Println("Creating BUILDER_HEAD branch, but the server may not be able to fetch it.")
-		}
 		req.Revision, err = clientConfig.Repository.GitCreateBuilderHead(context.Background(), executor)
 		if err != nil {
 			log.Fatal(err.Error())

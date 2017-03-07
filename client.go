@@ -193,16 +193,19 @@ func SendRequestToRemoteServer(e Executor, clientConfig Config, serverConfig Con
 		return ConfigIncompleteError
 	}
 
+	// First preference is to run the command locally.
 	if clientConfig.Host == serverConfig.Host {
 		return runLocallyWithoutServer(serverConfig, request, handler)
 	}
 
+	// If the server has an endpoint on the client machine, then talk to that endpoint.
 	for _, endpoint := range serverConfig.Platform.Endpoints {
 		if endpoint.Host == clientConfig.Host {
 			return runWithLocalEndpoint(clientConfig, serverConfig, endpoint, request, handler)
 		}
 	}
 
+	// If we can ssh directly to the server, then do so.
 	for _, sshTarget := range clientConfig.Host.SshTargets {
 		if sshTarget.Host == serverConfig.Host {
 			return runViaSshPassThrough(e, sshTarget, clientConfig, serverConfig,
@@ -210,6 +213,7 @@ func SendRequestToRemoteServer(e Executor, clientConfig Config, serverConfig Con
 		}
 	}
 
+	// Finally, if we can ssh to a host that has an endpoint for the target server, do so.
 	for _, sshTarget := range clientConfig.Host.SshTargets {
 		for _, endpoint := range serverConfig.Platform.Endpoints {
 			if endpoint.Host == sshTarget.Host {
@@ -219,5 +223,6 @@ func SendRequestToRemoteServer(e Executor, clientConfig Config, serverConfig Con
 		}
 	}
 
+	// We don't try any harder than this.
 	return NoRouteToTargetError
 }
