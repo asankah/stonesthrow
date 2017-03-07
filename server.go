@@ -343,7 +343,7 @@ The ID of the job should be specified as the only argument. Any new processes st
 			}()
 
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil
 		}
 	}
 }
