@@ -197,7 +197,7 @@ func (f *ConsoleFormatter) Format(message interface{}) error {
 
 	case *stonesthrow.BeginCommandMessage:
 		f.Show("bc",
-			`{{platform | subject}}: {{range .Command}}{{.}} {{end}}{{if .WorkDir}} [{{.WorkDir | info}}]{{end}}
+			`{{.Hostname | subject}}: {{range .Command}}{{.}} {{end}}{{if .WorkDir}} [{{.WorkDir | info}}]{{end}}
 `, t)
 		f.SetupFilterChainForCommand(t.Command)
 

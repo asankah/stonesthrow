@@ -16,6 +16,7 @@ type BeginCommandMessage struct {
 	IsInteractive bool     `json:"interactive"`
 	Command       []string `json:"command"`
 	WorkDir       string   `json:"workdir,omitempty"`
+	Hostname      string   `json:"host,omitempty"`
 }
 
 type TerminalOutputMessage struct {

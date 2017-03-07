@@ -25,10 +25,11 @@ func (c Channel) Stream(stream io.Reader) {
 	}
 }
 
-func (c Channel) BeginCommand(workdir string, command []string, isInteractive bool) {
+func (c Channel) BeginCommand(hostname string, workdir string, command []string, isInteractive bool) {
 	c.conn.Send(BeginCommandMessage{
 		IsInteractive: isInteractive,
 		WorkDir:       workdir,
+		Hostname:      hostname,
 		Command:       command})
 }
 

@@ -56,8 +56,8 @@ func main() {
 	if *passthrough {
 		err = stonesthrow.RunPassthroughClient(clientConfig, serverConfig)
 		if err != nil {
-			log.Fatalf("Passthrough client failed : %#v, \nWhile attempting to contact: %s from %s",
-				err, serverConfig.Host.Name, clientConfig.Host.Name)
+			log.Fatalf("Passthrough client failed : %#v, \nWhile attempting to contact: %s from %s\nError: %s",
+				err, serverConfig.Host.Name, clientConfig.Host.Name, err.Error())
 		}
 		return
 	}

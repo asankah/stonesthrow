@@ -48,7 +48,7 @@ func (s *Session) CheckCommand(ctx context.Context, workDir string, command ...s
 		return EmptyCommandError
 	}
 
-	s.channel.BeginCommand(workDir, command, false)
+	s.channel.BeginCommand(s.local.Host.Name, workDir, command, false)
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Env = nil // inherit
 	cmd.Dir = workDir
@@ -430,6 +430,13 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 		return NothingToDoError
 	}
 
+	branchConfigs, err := s.local.Repository.GitGetBranchConfig(ctx, s, branches,
+		append(localRepository.GitConfig.SyncableProperties,
+			remoteRepository.GitConfig.SyncableProperties...))
+	if err != nil {
+		return err
+	}
+
 	peerSession := Session{local: s.local, remote: *remoteConfig, channel: s.channel, processAdder: s.processAdder}
 	err = peerSession.SendRequestToRemoteServer(
 		RequestMessage{
@@ -440,17 +447,15 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 		return err
 	}
 
-	err = s.local.Repository.GitPush(ctx, s, branches, true)
+	output, err := s.local.Repository.GitPush(ctx, s, branches, true)
 	if err != nil {
 		return err
 	}
-
-	branchConfigs, err := s.local.Repository.GitGetBranchConfig(ctx, s, branches,
-		append(localRepository.GitConfig.SyncableProperties,
-			remoteRepository.GitConfig.SyncableProperties...))
-	if err != nil {
-		return err
+	s.channel.BeginCommand(s.local.Host.Name, s.local.Repository.SourcePath, []string{"git", "push"}, false)
+	for _, line := range output {
+		s.channel.Send(TerminalOutputMessage{Output: line})
 	}
+	s.channel.Send(EndCommandMessage{})
 
 	return peerSession.SendRequestToRemoteServer(
 		RequestMessage{
@@ -466,8 +471,7 @@ func (s *Session) SendRequestToRemoteServer(request RequestMessage) error {
 		return NothingToDoError
 	}
 	s.channel.Info(fmt.Sprintf("Sending %s request to remote server %s", request.Command, s.remote.Host.Name))
+	defer s.channel.Info("Done")
 	return SendRequestToRemoteServer(s, s.local, s.remote, request,
 		s.channel.NewSendChannel())
-	s.channel.Info("Done")
-	return nil
 }

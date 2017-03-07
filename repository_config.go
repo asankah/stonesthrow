@@ -149,7 +149,8 @@ func (r *RepositoryConfig) GitCreateBuilderHead(ctx context.Context, e Executor)
 }
 
 func (r *RepositoryConfig) GitPushBuilderHead(ctx context.Context, e Executor) error {
-	return r.GitPush(ctx, e, []string{"BUILDER_HEAD"}, false)
+	_, err := r.GitPush(ctx, e, []string{"BUILDER_HEAD"}, false)
+	return err
 }
 
 func (r *RepositoryConfig) GitFetchBuilderHead(ctx context.Context, e Executor) error {
@@ -166,18 +167,18 @@ func (r *RepositoryConfig) branchListToRefspec(ctx context.Context, e Executor, 
 		if branch == "" {
 			continue
 		}
-		refspecs = append(refspecs, fmt.Sprintf("+%s:%s", branch))
+		refspecs = append(refspecs, fmt.Sprintf("+%s:%s", branch, branch))
 	}
 	return refspecs
 }
 
-func (r *RepositoryConfig) GitPush(ctx context.Context, e Executor, branches []string, setUpstream bool) error {
+func (r *RepositoryConfig) GitPush(ctx context.Context, e Executor, branches []string, setUpstream bool) ([]string, error) {
 	if len(branches) == 0 {
-		return InvalidArgumentError
+		return nil, InvalidArgumentError
 	}
 
 	if r.GitConfig.Remote == "" {
-		return NoUpstreamError
+		return nil, NoUpstreamError
 	}
 
 	command := []string{"git", "push", r.GitConfig.Remote, "--porcelain", "--thin", "--force"}
@@ -191,14 +192,14 @@ func (r *RepositoryConfig) GitPush(ctx context.Context, e Executor, branches []s
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "!\t") {
-			return FailedToPushGitBranchError
+			return lines, FailedToPushGitBranchError
 		}
 
 		if line == "Done" {
-			return nil
+			return lines, nil
 		}
 	}
-	return err
+	return lines, err
 }
 
 func (r *RepositoryConfig) GitFetch(ctx context.Context, e Executor, branches []string) error {
@@ -323,7 +324,7 @@ func (r *RepositoryConfig) GitGetBranchConfig(ctx context.Context, e Executor,
 	for _, configLine := range configLines {
 		fields := strings.Split(configLine, "\n")
 		if len(fields) != 2 {
-			return nil, fmt.Errorf("Invalid format for config line: [%s]", configLine)
+			continue
 		}
 
 		name := fields[0]
