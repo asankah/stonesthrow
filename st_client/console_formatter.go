@@ -134,6 +134,10 @@ func (f *ConsoleFormatter) ApplyFilters(s string) string {
 	return output
 }
 
+func (f *ConsoleFormatter) ClearFilters() {
+	f.filterChain = nil
+}
+
 func (f *ConsoleFormatter) GetTemplate(name string, templateValue string) (*template.Template, error) {
 	if f.templates == nil {
 		f.templates = make(map[string]*template.Template)
@@ -210,6 +214,7 @@ func (f *ConsoleFormatter) Format(message interface{}) error {
 
 `, t)
 		}
+		f.ClearFilters()
 
 	case *stonesthrow.CommandListMessage:
 		f.Show("help", `{{if .Synposis}}{{.Synposis}}

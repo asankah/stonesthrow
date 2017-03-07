@@ -2,6 +2,7 @@ package stonesthrow
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 )
@@ -64,8 +65,32 @@ func (c Channel) Receive() (interface{}, error) {
 func (c Channel) NewSendChannel() chan interface{} {
 	channel := make(chan interface{})
 	go func() {
-		for m := range channel {
-			c.Send(m)
+		for message := range channel {
+			switch t := message.(type) {
+			case *TerminalOutputMessage:
+				c.Send(*t)
+
+			case *InfoMessage:
+				c.Send(*t)
+
+			case *ErrorMessage:
+				c.Send(*t)
+
+			case *BeginCommandMessage:
+				c.Send(*t)
+
+			case *EndCommandMessage:
+				c.Send(*t)
+
+			case *CommandListMessage:
+				c.Send(*t)
+
+			case *JobListMessage:
+				c.Send(*t)
+
+			case *RequestMessage:
+				c.Send(*t)
+			}
 		}
 	}()
 
