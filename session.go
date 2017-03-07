@@ -3,6 +3,7 @@ package stonesthrow
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -543,6 +544,7 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 }
 
 func (s *Session) SendBranchConfigToCaller(ctx context.Context, configs []BranchConfig) error {
+	log.Printf("Received %#v", configs)
 	configsToReturn := []BranchConfig{}
 	for _, config := range configs {
 		properties := []string{}
