@@ -85,7 +85,7 @@ func (r *RepositoryConfig) GitRevision(ctx context.Context, e Executor, name str
 
 func (r *RepositoryConfig) GitTreeForRevision(ctx context.Context, e Executor, name string) (string, error) {
 	if runtime.GOOS == "windows" {
-		return r.RunHere(ctx, e, "git", "rev-parse", fmt.Sprintf("\"%s^^^^{tree}\"", name))
+		return r.RunHere(ctx, e, "git", "rev-parse", fmt.Sprintf("%s^^^^{tree}", name))
 	} else {
 		return r.RunHere(ctx, e, "git", "rev-parse", fmt.Sprintf("%s^{tree}", name))
 	}
