@@ -538,6 +538,8 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 
 	if len(branches) == 1 && branches[0] != "refs/heads/*" {
 		return s.local.Repository.GitCheckoutRevision(ctx, s, branches[0])
+	} else {
+		return s.local.Repository.GitCheckoutRevision(ctx, s, "origin/master")
 	}
 	return nil
 }
