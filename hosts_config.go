@@ -12,24 +12,26 @@ type HostsConfig struct {
 }
 
 func (h *HostsConfig) Normalize() error {
-	for hostName, hostConfig := range h.Hosts {
-		if hostConfig.Name == "" {
-			err := hostConfig.Normalize(hostName)
-			if err != nil {
-				return err
-			}
-		}
+	for _, hostConfig := range h.Hosts {
 		for _, alias := range hostConfig.Alias {
 			h.Hosts[alias] = hostConfig
 		}
 	}
 
-	// Resolve SSH config references. We are doing this separately because
-	// we want all the aliases to be resolved before we start looking at
-	// SSH configs.
-	for _, hostConfig := range h.Hosts {
-		for index, remote := range hostConfig.SshTargets {
-			hostConfig.SshTargets[index].Host, _ = h.Hosts[remote.HostName]
+	for hostName, hostConfig := range h.Hosts {
+		if hostConfig.Name != "" {
+			// No need to do this again if we've normalized this HostConfig
+			continue
+		}
+
+		for remote_host, remote := range hostConfig.Remotes {
+			remote.HostName = remote_host
+			remote.Host, _ = h.Hosts[remote_host]
+		}
+
+		err := hostConfig.Normalize(hostName)
+		if err != nil {
+			return err
 		}
 
 		for _, repo := range hostConfig.Repositories {

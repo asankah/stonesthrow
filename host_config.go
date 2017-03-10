@@ -5,20 +5,13 @@ import (
 	"strings"
 )
 
-type SshTarget struct {
-	HostName      string `json:"host"`
-	SshConfigName string `json:"ssh_config"`
-
-	Host *HostConfig `json:"-"`
-}
-
 type HostConfig struct {
-	Alias           []string                     `json:"alias,omitempty"`
-	Repositories    map[string]*RepositoryConfig `json:"repositories,omitempty"`
-	GomaPath        string                       `json:"goma_path,omitempty"`
-	StonesthrowPath string                       `json:"stonesthrow,omitempty"`
-	MaxBuildJobs    int                          `json:"max_build_jobs,omitempty"`
-	SshTargets      []SshTarget                  `json:"ssh_targets"`
+	Alias           []string                          `json:"alias,omitempty"`
+	Repositories    map[string]*RepositoryConfig      `json:"repositories,omitempty"`
+	GomaPath        string                            `json:"goma_path,omitempty"`
+	StonesthrowPath string                            `json:"stonesthrow,omitempty"`
+	MaxBuildJobs    int                               `json:"max_build_jobs,omitempty"`
+	Remotes         map[string]*RemoteTransportConfig `json:"remotes,omitempty"`
 
 	Name              string            `json:"-"`
 	DefaultRepository *RepositoryConfig `json:"-"`
@@ -47,6 +40,13 @@ func (h *HostConfig) Validate() error {
 
 	for _, r := range h.Repositories {
 		err := r.Validate()
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, t := range h.Remotes {
+		err := t.Validate()
 		if err != nil {
 			return err
 		}

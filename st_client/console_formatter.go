@@ -106,7 +106,7 @@ func (f *ConsoleFormatter) AddNinjaFilters() {
 		` (CC|CXX|OBJCXX) `,
 		CSourceBuildStep(" $1 "))
 	f.AddRegExpReplace(
-		` (STAMP|ACTION|AR|LINK|SOLINK|RC|LIB|LIBTOOL|LIBTOOL-STATIC) `,
+		` (STAMP|ACTION|AR|LINK|SOLINK|RC|LIB|LIBTOOL|LIBTOOL-STATIC|LINK\(DLL\)|ASM) `,
 		CAuxBuildStep(" $1 "))
 	f.DimProgress()
 }

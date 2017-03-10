@@ -2,7 +2,6 @@ package stonesthrow
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -148,7 +147,7 @@ func RunPassthroughClient(clientConfig, serverConfig Config) error {
 	return nil
 }
 
-func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, serverConfig Config,
+func runViaSshPassThrough(e Executor, remote RemoteTransportConfig, clientConfig Config, serverConfig Config,
 	request RequestMessage, handler chan interface{}) error {
 
 	ctx := context.Background()
@@ -160,15 +159,8 @@ func runViaSshPassThrough(e Executor, sshTarget SshTarget, clientConfig Config, 
 		}
 	}
 
-	if sshTarget.SshConfigName == "" {
-		sshTarget.SshConfigName = sshTarget.HostName
-	}
-	sshCommand := []string{sshTarget.SshConfigName, "-T",
-		fmt.Sprintf("%s/%s", sshTarget.Host.StonesthrowPath, "st_client"),
-		"--server", serverConfig.PlatformName,
-		"--repository", serverConfig.RepositoryName,
-		"--passthrough"}
-	cmd := exec.CommandContext(ctx, "ssh", sshCommand...)
+	command_line := remote.GetCommand(&serverConfig)
+	cmd := exec.CommandContext(ctx, command_line[0], command_line[1:]...)
 
 	writeEnd, err := cmd.StdinPipe()
 	if err != nil {
@@ -205,18 +197,18 @@ func SendRequestToRemoteServer(e Executor, clientConfig Config, serverConfig Con
 	}
 
 	// If we can ssh directly to the server, then do so.
-	for _, sshTarget := range clientConfig.Host.SshTargets {
-		if sshTarget.Host == serverConfig.Host {
-			return runViaSshPassThrough(e, sshTarget, clientConfig, serverConfig,
+	for _, remote := range clientConfig.Host.Remotes {
+		if remote.Host == serverConfig.Host {
+			return runViaSshPassThrough(e, *remote, clientConfig, serverConfig,
 				request, handler)
 		}
 	}
 
 	// Finally, if we can ssh to a host that has an endpoint for the target server, do so.
-	for _, sshTarget := range clientConfig.Host.SshTargets {
+	for _, remote := range clientConfig.Host.Remotes {
 		for _, endpoint := range serverConfig.Platform.Endpoints {
-			if endpoint.Host == sshTarget.Host {
-				return runViaSshPassThrough(e, sshTarget, clientConfig, serverConfig,
+			if endpoint.Host == remote.Host {
+				return runViaSshPassThrough(e, *remote, clientConfig, serverConfig,
 					request, handler)
 			}
 		}

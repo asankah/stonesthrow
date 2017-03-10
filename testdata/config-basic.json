@@ -55,6 +55,10 @@
 				"git_hostname": "a"
 			}
 		},
-		"goma_path": "C:\\Users\\user\\goma"
+		"goma_path": "C:\\Users\\user\\goma",
+		"remotes": {
+			"b": { "ssh_command": ["ssh", "foo", "bar"] },
+			"a": { "ssh_command": ["ssh", "-Dfoo"] }
+		}
 	}
 }
