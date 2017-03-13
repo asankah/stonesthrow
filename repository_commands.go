@@ -241,7 +241,7 @@ func (r RepositoryCommands) GitStatus(ctx context.Context) (GitStatusResult, err
 		// Normal changed entry.
 		if strings.HasPrefix(text, "1 ") {
 			fields := strings.Split(text, " ")
-			if len(fields) < 9 || len(fields[1]) != 2 || fields[1][1] == '.' {
+			if len(fields) < 9 || len(fields[1]) != 2 {
 				continue
 			}
 			result.ModifiedFiles = append(result.ModifiedFiles, fields[8])
