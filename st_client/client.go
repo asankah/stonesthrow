@@ -100,7 +100,8 @@ func main() {
 	req.Repository = *repository
 	req.SourceHostname = clientConfig.Host.Name
 	if serverConfig.Host != clientConfig.Host && stonesthrow.CommandNeedsRevision(req.Command) {
-		req.Revision, err = clientConfig.Repository.GitCreateBuilderHead(context.Background(), executor)
+		req.Revision, err = stonesthrow.RepositoryCommands{clientConfig.Repository, executor}.GitCreateBuilderHead(
+			context.Background())
 		if err != nil {
 			log.Fatal(err.Error())
 		}

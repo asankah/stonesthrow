@@ -153,7 +153,7 @@ func runViaSshPassThrough(e Executor, remote RemoteTransportConfig, clientConfig
 	ctx := context.Background()
 	if CommandNeedsRevision(request.Command) {
 		// Passthrough requires that the server already have the correct BUILDER_HEAD.
-		err := clientConfig.Repository.GitPushBuilderHead(ctx, e)
+		err := RepositoryCommands{clientConfig.Repository, e}.GitPushBuilderHead(ctx)
 		if err != nil {
 			return err
 		}

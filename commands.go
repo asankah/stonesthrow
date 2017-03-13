@@ -87,8 +87,7 @@ var DefaultHandlers = []CommandHandler{
 		"branch",
 		`List local branches.`, "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
-			return s.local.Repository.CheckHere(
-				ctx, s, "git", "branch", "--list", "-vvv")
+			return s.Repository().Execute(ctx, "", "git", "branch", "--list", "-vvv")
 		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{
@@ -125,10 +124,10 @@ var DefaultHandlers = []CommandHandler{
 
 			if srcValue.Value.String() == "true" {
 				if forceValue.Value.String() == "true" {
-					return s.local.Repository.CheckHere(ctx, s, "git", "clean", "-f")
+					return s.Repository().Execute(ctx, "", "git", "clean", "-f")
 				} else {
 					s.channel.Info("Specify 'clean source force' to remove files not recognized by git.")
-					return s.local.Repository.CheckHere(ctx, s, "git", "clean", "-n")
+					return s.Repository().Execute(ctx, "", "git", "clean", "-n")
 				}
 			}
 			return InvalidArgumentError
@@ -199,7 +198,7 @@ var DefaultHandlers = []CommandHandler{
 
 	CommandHandler{"__prepare_for_git_push__", "", "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
-			return s.local.Repository.CheckHere(ctx, s, "git", "checkout", "--detach", "origin/master")
+			return s.Repository().Execute(ctx, "", "git", "checkout", "--detach", "origin/master")
 
 		}, NO_REVISION, HIDE_FROM_HELP},
 
@@ -210,7 +209,7 @@ var DefaultHandlers = []CommandHandler{
 
 	CommandHandler{"__apply_branch_config__", "", "", nil,
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
-			return s.local.Repository.GitSetBranchConfig(ctx, s, req.BranchConfigs)
+			return s.Repository().GitSetBranchConfig(ctx, req.BranchConfigs)
 		}, NO_REVISION, HIDE_FROM_HELP}}
 
 func AddHandler(command string, doc string, handler RequestHandler, needsRevision NeedsRevision) {
@@ -231,7 +230,7 @@ func handleHelp(ctx context.Context, s *Session, _ RequestMessage, _ *flag.FlagS
 	var chromeRepo Repository
 	chromeRepo.BuildPath = s.local.GetBuildPath()
 	chromeRepo.SourcePath = s.local.GetSourcePath()
-	chromeRepo.Revistion, _ = s.local.Repository.GitRevision(ctx, s, "HEAD")
+	chromeRepo.Revistion, _ = s.Repository().GitRevision(ctx, "HEAD")
 	commandList.Synposis = "Remote build runner"
 	commandList.ConfigFile = s.local.ConfigurationFile.FileName
 	commandList.Repositories["chrome"] = chromeRepo

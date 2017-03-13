@@ -1,6 +1,7 @@
 package stonesthrow
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -28,21 +29,76 @@ type ProcessRecord struct {
 }
 
 type Session struct {
-	local        Config
-	remote       Config
-	channel      Channel
-	processAdder ProcessAdder
+	local              Config
+	remote             Config
+	channel            Channel
+	processAdder       ProcessAdder
+	repositoryCommands RepositoryCommands
 }
 
-func (s *Session) RunCommand(ctx context.Context, workdir string, command ...string) (string, error) {
+func (s *Session) Repository() *RepositoryCommands {
+	if s.repositoryCommands.Repository == nil {
+		s.repositoryCommands.Repository = s.local.Repository
+		s.repositoryCommands.Executor = s
+	}
+	return &s.repositoryCommands
+}
+
+func (s *Session) ExecuteSilently(ctx context.Context, workdir string, command ...string) (string, error) {
 	return RunCommandWithWorkDir(ctx, workdir, command...)
 }
 
-func (s *Session) CommandAtSourceDir(ctx context.Context, command ...string) error {
-	return s.local.Repository.CheckHere(ctx, s, command...)
+func (s *Session) ExecuteWithOutput(ctx context.Context, workdir string, command ...string) (string, error) {
+	// Nothing to do?
+	if len(command) == 0 {
+		return "", EmptyCommandError
+	}
+
+	s.channel.BeginCommand(s.local.Host.Name, workdir, command, false)
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+	cmd.Env = nil // inherit
+	cmd.Dir = workdir
+
+	var output bytes.Buffer
+	cmd.Stdout = &output
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		s.channel.Error(fmt.Sprintf("Can't open stderr pipe: %s", err.Error()))
+		return "", err
+	}
+
+	quitter := make(chan int)
+	go func() {
+		s.channel.Stream(stderrPipe)
+		quitter <- 2
+	}()
+
+	cmd.Start()
+	if s.processAdder != nil {
+		s.processAdder.AddProcess(command, cmd.Process)
+	}
+	err = cmd.Wait()
+	stderrPipe.Close()
+	<-quitter
+	s.channel.Stream(bytes.NewReader(output.Bytes()))
+
+	outputString := strings.TrimSpace(output.String())
+	if err != nil {
+		return outputString, err
+	}
+	if s.processAdder != nil {
+		s.processAdder.RemoveProcess(cmd.Process, cmd.ProcessState)
+	}
+	s.channel.EndCommand(cmd.ProcessState)
+	if cmd.ProcessState.Success() {
+		return outputString, nil
+	}
+
+	return outputString, ExternalCommandFailedError
 }
 
-func (s *Session) CheckCommand(ctx context.Context, workDir string, command ...string) error {
+func (s *Session) Execute(ctx context.Context, workDir string, command ...string) error {
 	// Nothing to do?
 	if len(command) == 0 {
 		return EmptyCommandError
@@ -109,7 +165,7 @@ func (s *Session) runMB(ctx context.Context, command ...string) error {
 		arguments = append(arguments, "--goma-dir", s.local.Host.GomaPath)
 	}
 	arguments = append(arguments, command[1:]...)
-	return s.CommandAtSourceDir(ctx, arguments...)
+	return s.Repository().Execute(ctx, "", arguments...)
 }
 
 func ShortTargetNameFromGNLabel(label string) string {
@@ -125,12 +181,12 @@ func ShortTargetNameFromGNLabel(label string) string {
 
 func (s *Session) SyncWorkdir(ctx context.Context, targetHash string) error {
 	depsFile := s.local.GetSourcePath("DEPS")
-	oldDepsHash, _ := s.local.Repository.GitHashObject(ctx, s, depsFile)
-	err := s.local.Repository.GitCheckoutRevision(ctx, s, targetHash)
+	oldDepsHash, _ := s.Repository().GitHashObject(ctx, depsFile)
+	err := s.Repository().GitCheckoutRevision(ctx, targetHash)
 	if err != nil {
 		return err
 	}
-	newDepsHash, _ := s.local.Repository.GitHashObject(ctx, s, depsFile)
+	newDepsHash, _ := s.Repository().GitHashObject(ctx, depsFile)
 	if oldDepsHash != newDepsHash {
 		s.channel.Info("DEPS changed. Running 'sync'")
 		return s.RunGclientSync(ctx)
@@ -142,7 +198,7 @@ func (s *Session) RunGclientSync(ctx context.Context) error {
 	if s.local.PlatformName == "mac" {
 		os.Setenv("FORCE_MAC_TOOLCHAIN", "1")
 	}
-	return s.local.Repository.CheckHere(ctx, s, "gclient", "sync")
+	return s.Repository().Execute(ctx, "", "gclient", "sync")
 }
 
 func (s *Session) PrepareBuild(ctx context.Context) error {
@@ -170,7 +226,7 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 		attemptedToStartGoma := false
 		gomaCommand := []string{path.Join(s.local.Host.GomaPath, "goma_ctl.bat")}
 		for i := 0; i < 5; i += 1 {
-			output, err := s.local.Repository.RunHere(ctx, s, append(gomaCommand, "status")...)
+			output, err := s.Repository().ExecuteSilently(ctx, "", append(gomaCommand, "status")...)
 			if err != nil {
 				return err
 			}
@@ -200,8 +256,8 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 		s.channel.Error("Timed out.")
 		return TimedOutError
 	} else {
-		return s.CommandAtSourceDir(
-			ctx, path.Join(s.local.Host.GomaPath, "goma_ctl.py"), "ensure_start")
+		return s.Repository().Execute(
+			ctx, "", path.Join(s.local.Host.GomaPath, "goma_ctl.py"), "ensure_start")
 	}
 }
 
@@ -227,7 +283,7 @@ func (s *Session) BuildTargets(ctx context.Context, targets ...string) error {
 		command = append(command, "-j", fmt.Sprintf("%d", s.local.Host.MaxBuildJobs))
 	}
 	command = append(command, targets...)
-	return s.CommandAtSourceDir(ctx, command...)
+	return s.Repository().Execute(ctx, "", command...)
 }
 
 func (s *Session) CleanTargets(ctx context.Context, targets ...string) error {
@@ -244,7 +300,7 @@ func (s *Session) CleanTargets(ctx context.Context, targets ...string) error {
 
 	command := []string{"ninja", "-C", s.local.GetBuildPath(), "-t", "clean"}
 	command = append(command, targets...)
-	return s.CommandAtSourceDir(ctx, command...)
+	return s.Repository().Execute(ctx, "", command...)
 }
 
 func (s *Session) Clobber(ctx context.Context, force bool) error {
@@ -315,16 +371,16 @@ func (s *Session) RunTestTarget(ctx context.Context, target string, args []strin
 }
 
 func (s *Session) GitStatus(ctx context.Context) error {
-	return s.CommandAtSourceDir(ctx, "git", "status")
+	return s.Repository().Execute(ctx, "", "git", "status")
 }
 
 func (s *Session) updateGitWorkDir(ctx context.Context, workDir string) error {
-	err := s.CheckCommand(ctx, workDir, "git", "checkout", "origin/master")
+	err := s.Execute(ctx, workDir, "git", "checkout", "origin/master")
 	if err != nil {
 		return err
 	}
 
-	return s.CheckCommand(ctx, workDir, "git", "pull", "origin", "master")
+	return s.Execute(ctx, workDir, "git", "pull", "origin", "master")
 }
 
 func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
@@ -332,7 +388,7 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 		return NoUpstreamError
 	}
 
-	output, err := s.local.Repository.RunHere(ctx, s, "git", "status", "--porcelain",
+	output, err := s.Repository().ExecuteSilently(ctx, "", "git", "status", "--porcelain",
 		"--untracked-files=normal")
 	if err != nil {
 		return err
@@ -346,7 +402,7 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 	// Ignoring error here since we should be able to run rebase-update with a
 	// detached head. If there's no symolic ref, then we'll skip the final
 	// checkout step.
-	previousHead, _ := s.local.Repository.RunHere(ctx, s, "git", "symbolic-ref", "-q", "HEAD")
+	previousHead, _ := s.Repository().ExecuteSilently(ctx, "", "git", "symbolic-ref", "-q", "HEAD")
 
 	if fetch {
 		s.channel.Info("Updating clank")
@@ -367,11 +423,11 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 		}
 	}
 
-	err = s.local.Repository.CheckHere(ctx, s, "git", "clean", "-f")
-	err = s.local.Repository.CheckHere(ctx, s, "git", "rebase-update",
+	err = s.Repository().Execute(ctx, "", "git", "clean", "-f")
+	err = s.Repository().Execute(ctx, "", "git", "rebase-update",
 		"--no-fetch", "--keep-going")
 	if previousHead != "" {
-		s.CommandAtSourceDir(ctx, "git", "checkout", previousHead)
+		s.Repository().Execute(ctx, "", "git", "checkout", previousHead)
 	}
 
 	return err
@@ -381,7 +437,7 @@ func (s *Session) resolveLocalBranches(ctx context.Context, branches []string) (
 	resolvedBranches := []string{}
 	for _, branch := range branches {
 		if branch == "HEAD" {
-			head_branch, err := s.local.Repository.GitCurrentBranch(ctx, s)
+			head_branch, err := s.Repository().GitCurrentBranch(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -436,7 +492,7 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 		return NothingToDoError
 	}
 
-	branchConfigs, err := s.local.Repository.GitGetBranchConfig(ctx, s, branches,
+	branchConfigs, err := s.Repository().GitGetBranchConfig(ctx, branches,
 		append(localRepository.GitConfig.SyncableProperties,
 			remoteRepository.GitConfig.SyncableProperties...))
 	if err != nil {
@@ -453,7 +509,7 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 		return err
 	}
 
-	output, err := s.local.Repository.GitPush(ctx, s, branches, true)
+	output, err := s.Repository().GitPush(ctx, branches, true)
 	if err != nil {
 		return err
 	}
@@ -512,11 +568,11 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 		return NothingToDoError
 	}
 
-	err = s.local.Repository.CheckHere(ctx, s, "git", "checkout", "--detach", "origin/master")
+	err = s.Repository().Execute(ctx, "", "git", "checkout", "--detach", "origin/master")
 	if err != nil {
 		return err
 	}
-	err = s.local.Repository.GitFetch(ctx, s, branches)
+	err = s.Repository().GitFetch(ctx, branches)
 	if err != nil {
 		return err
 	}
@@ -543,9 +599,9 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 	}
 
 	if len(branches) == 1 && branches[0] != "refs/heads/*" {
-		return s.local.Repository.GitCheckoutRevision(ctx, s, branches[0])
+		return s.Repository().GitCheckoutRevision(ctx, branches[0])
 	} else {
-		return s.local.Repository.GitCheckoutRevision(ctx, s, "origin/master")
+		return s.Repository().GitCheckoutRevision(ctx, "origin/master")
 	}
 	return nil
 }
@@ -557,7 +613,7 @@ func (s *Session) SendBranchConfigToCaller(ctx context.Context, configs []Branch
 		for property, _ := range config.GitConfig {
 			properties = append(properties, property)
 		}
-		t, err := s.local.Repository.GitGetBranchConfig(ctx, s, []string{config.Name}, properties)
+		t, err := s.Repository().GitGetBranchConfig(ctx, []string{config.Name}, properties)
 		if err != nil {
 			return err
 		}

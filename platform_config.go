@@ -67,7 +67,7 @@ func (p *PlatformConfig) Validate() error {
 }
 
 func (p *PlatformConfig) RunHere(ctx context.Context, e Executor, command ...string) (string, error) {
-	return e.RunCommand(ctx, p.BuildPath, command...)
+	return e.ExecuteSilently(ctx, p.BuildPath, command...)
 }
 
 func (p *PlatformConfig) GetAllTargets(testOnly bool) (map[string]Command, error) {
