@@ -14,22 +14,22 @@ type RepositoryCommands struct {
 }
 
 func (r RepositoryCommands) Execute(c context.Context, workdir string, command ...string) error {
-	if workdir != "" {
-		return InvalidArgumentError
+	if workdir != "" && workdir != "." {
+		return NewInvalidArgumentError("WorkDir should be empty. Was %s", workdir)
 	}
 	return r.Executor.Execute(c, r.Repository.SourcePath, command...)
 }
 
 func (r RepositoryCommands) ExecuteSilently(c context.Context, workdir string, command ...string) (string, error) {
-	if workdir != "" {
-		return "", InvalidArgumentError
+	if workdir != "" && workdir != "." {
+		return "", NewInvalidArgumentError("WorkDir should be empty. Was %s", workdir)
 	}
 	return r.Executor.ExecuteSilently(c, r.Repository.SourcePath, command...)
 }
 
 func (r RepositoryCommands) ExecuteWithOutput(c context.Context, workdir string, command ...string) (string, error) {
-	if workdir != "" {
-		return "", InvalidArgumentError
+	if workdir != "" && workdir != "." {
+		return "", NewInvalidArgumentError("WorkDir should be empty. Was %s", workdir)
 	}
 	return r.Executor.ExecuteWithOutput(c, r.Repository.SourcePath, command...)
 }
@@ -39,14 +39,14 @@ func (r RepositoryCommands) GitCurrentBranch(ctx context.Context) (string, error
 }
 
 func (r RepositoryCommands) GitRevision(ctx context.Context, name string) (string, error) {
-	return r.ExecuteSilently(ctx, "git", "rev-parse", name)
+	return r.ExecuteSilently(ctx, "", "git", "rev-parse", name)
 }
 
 func (r RepositoryCommands) GitTreeForRevision(ctx context.Context, name string) (string, error) {
 	if runtime.GOOS == "windows" {
-		return r.ExecuteSilently(ctx, "git", "rev-parse", fmt.Sprintf("%s^^^^{tree}", name))
+		return r.ExecuteSilently(ctx, "", "git", "rev-parse", fmt.Sprintf("%s^^^^{tree}", name))
 	} else {
-		return r.ExecuteSilently(ctx, "git", "rev-parse", fmt.Sprintf("%s^{tree}", name))
+		return r.ExecuteSilently(ctx, "", "git", "rev-parse", fmt.Sprintf("%s^{tree}", name))
 	}
 }
 
@@ -58,18 +58,18 @@ func (r RepositoryCommands) GitCreateWorkTree(ctx context.Context) (string, erro
 	}
 
 	if status.HasUnmerged {
-		return "", UnmergedChangesExistError
+		return "", NewUnmergedChangesExistError("")
 	}
 
 	if !status.HasModified {
 		return r.GitTreeForRevision(ctx, "HEAD")
 	}
 
-	_, err = r.ExecuteSilently(ctx, "git", "add", "-u")
+	_, err = r.ExecuteSilently(ctx, "", "git", "add", "-u")
 	if err != nil {
 		return "", err
 	}
-	return r.ExecuteSilently(ctx, "git", "write-tree")
+	return r.ExecuteSilently(ctx, "", "git", "write-tree")
 }
 
 func (r RepositoryCommands) GitCreateBuilderHead(ctx context.Context) (string, error) {
@@ -87,7 +87,7 @@ func (r RepositoryCommands) GitCreateBuilderHead(ctx context.Context) (string, e
 			return "", err
 		}
 
-		tree, err = r.ExecuteSilently(ctx, "git", "write-tree")
+		tree, err = r.ExecuteSilently(ctx, "", "git", "write-tree")
 		if err != nil {
 			return "", err
 		}
@@ -104,11 +104,11 @@ func (r RepositoryCommands) GitCreateBuilderHead(ctx context.Context) (string, e
 		if err != nil {
 			return "", err
 		}
-		revision, err := r.ExecuteSilently(ctx, "git", "commit-tree", "-p", headCommit, "-m", "BUILDER_HEAD", tree)
+		revision, err := r.ExecuteSilently(ctx, "", "git", "commit-tree", "-p", headCommit, "-m", "BUILDER_HEAD", tree)
 		if err != nil {
 			return "", err
 		}
-		_, err = r.ExecuteSilently(ctx, "git", "update-ref", "refs/heads/BUILDER_HEAD", revision)
+		_, err = r.ExecuteSilently(ctx, "", "git", "update-ref", "refs/heads/BUILDER_HEAD", revision)
 		if err != nil {
 			return "", err
 		}
@@ -143,11 +143,11 @@ func (r RepositoryCommands) branchListToRefspec(ctx context.Context, branches []
 
 func (r RepositoryCommands) GitPush(ctx context.Context, branches []string, setUpstream bool) ([]string, error) {
 	if len(branches) == 0 {
-		return nil, InvalidArgumentError
+		return nil, NewInvalidArgumentError("No branches specified for 'git push'")
 	}
 
 	if r.Repository.GitConfig.Remote == "" {
-		return nil, NoUpstreamError
+		return nil, NewNoUpstreamError("No upstream configured for repository at %s", r.Repository.SourcePath)
 	}
 
 	command := []string{"git", "push", r.Repository.GitConfig.Remote, "--porcelain", "--thin", "--force"}
@@ -161,7 +161,7 @@ func (r RepositoryCommands) GitPush(ctx context.Context, branches []string, setU
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "!\t") {
-			return lines, FailedToPushGitBranchError
+			return lines, NewFailedToPushGitBranchError("Reslt: %s", line)
 		}
 
 		if line == "Done" {
@@ -173,10 +173,10 @@ func (r RepositoryCommands) GitPush(ctx context.Context, branches []string, setU
 
 func (r RepositoryCommands) GitFetch(ctx context.Context, branches []string) error {
 	if len(branches) == 0 {
-		return InvalidArgumentError
+		return NewInvalidArgumentError("No branches specified for 'git fetch'")
 	}
 	if r.Repository.GitConfig.Remote == "" {
-		return NoUpstreamError
+		return NewNoUpstreamError("No upstream configured for repository at %s", r.Repository.SourcePath)
 	}
 	command := []string{"git", "fetch", r.Repository.GitConfig.Remote}
 	command = append(command, r.branchListToRefspec(ctx, append(branches, "refs/remotes/origin/master"))...)
@@ -185,7 +185,7 @@ func (r RepositoryCommands) GitFetch(ctx context.Context, branches []string) err
 }
 
 func (r RepositoryCommands) GitHashObject(ctx context.Context, path string) (string, error) {
-	return r.ExecuteSilently(ctx, "git", "hash-object", path)
+	return r.ExecuteSilently(ctx, "", "git", "hash-object", path)
 }
 
 func (r RepositoryCommands) GitCheckoutRevision(ctx context.Context, targetRevision string) error {
@@ -206,7 +206,7 @@ func (r RepositoryCommands) GitCheckoutRevision(ctx context.Context, targetRevis
 		return err
 	}
 
-	err = r.Execute(ctx, "git", "checkout", "--force", "--quiet", "--no-progress", targetRevision)
+	err = r.Execute(ctx, "", "git", "checkout", "--force", "--quiet", "--no-progress", targetRevision)
 	if err != nil {
 		return err
 	}
@@ -222,7 +222,7 @@ type GitStatusResult struct {
 
 func (r RepositoryCommands) GitStatus(ctx context.Context) (GitStatusResult, error) {
 	var result GitStatusResult
-	gitStatus, err := r.ExecuteSilently(ctx, "git", "status", "--porcelain=2",
+	gitStatus, err := r.ExecuteSilently(ctx, "", "git", "status", "--porcelain=2",
 		"--untracked-files=no", "--ignore-submodules")
 	if err != nil {
 		return result, err
@@ -281,7 +281,7 @@ func (r RepositoryCommands) GitGetBranchConfig(ctx context.Context,
 		}
 	}
 
-	allPropertiesString, err := r.ExecuteSilently(ctx, "git", "config", "--local", "-z", "--get-regex", "^branch\\..*")
+	allPropertiesString, err := r.ExecuteSilently(ctx, "", "git", "config", "--local", "-z", "--get-regex", "^branch\\..*")
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +324,7 @@ func (r RepositoryCommands) GitGetBranchConfig(ctx context.Context,
 	}
 
 	for _, c := range branchSet {
-		revision, err := r.ExecuteSilently(ctx, "git", "rev-parse", c.Name)
+		revision, err := r.ExecuteSilently(ctx, "", "git", "rev-parse", c.Name)
 		if err != nil {
 			delete(branchSet, c.Name)
 			continue
@@ -344,7 +344,7 @@ func (r RepositoryCommands) GitSetBranchConfig(ctx context.Context,
 	branchConfigs []BranchConfig) error {
 
 	for _, config := range branchConfigs {
-		revision, err := r.ExecuteSilently(ctx, "git", "rev-parse", config.Name)
+		revision, err := r.ExecuteSilently(ctx, "", "git", "rev-parse", config.Name)
 		if err != nil {
 			return fmt.Errorf("Unknown branch %s", config.Name)
 		}
@@ -356,7 +356,7 @@ func (r RepositoryCommands) GitSetBranchConfig(ctx context.Context,
 
 		for name, value := range config.GitConfig {
 			configName := fmt.Sprintf("branch.%s.%s", config.Name, name)
-			err := r.Execute(ctx, "git", "config", "--local", configName, value)
+			err := r.Execute(ctx, "", "git", "config", "--local", configName, value)
 			if err != nil {
 				return err
 			}

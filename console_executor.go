@@ -25,7 +25,7 @@ func (c ConsoleExecutor) ExecuteSilently(ctx context.Context, workdir string, co
 
 func (c ConsoleExecutor) Execute(ctx context.Context, workdir string, command ...string) error {
 	if len(command) == 0 {
-		return EmptyCommandError
+		return NewEmptyCommandError("")
 	}
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = workdir
@@ -47,7 +47,7 @@ func (c ConsoleExecutor) Execute(ctx context.Context, workdir string, command ..
 func (c ConsoleExecutor) ExecuteWithOutput(ctx context.Context,
 	workdir string, command ...string) (string, error) {
 	if len(command) == 0 {
-		return "", EmptyCommandError
+		return "", NewEmptyCommandError("")
 	}
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = workdir
@@ -71,7 +71,7 @@ func (c ConsoleExecutor) ExecuteWithOutput(ctx context.Context,
 
 func RunCommandWithWorkDir(ctx context.Context, workdir string, command ...string) (string, error) {
 	if len(command) == 0 {
-		return "", EmptyCommandError
+		return "", NewEmptyCommandError("")
 	}
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = workdir

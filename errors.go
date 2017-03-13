@@ -1,37 +1,52 @@
 package stonesthrow
 
 import (
-	"errors"
 	"fmt"
+	"runtime/debug"
 )
+
+type ErrorWithDetails struct {
+	ErrorClass string
+	Details    string
+	Stack      []byte
+}
+
+func (e ErrorWithDetails) Error() string {
+	return fmt.Sprintf("%s: %s: %s", e.ErrorClass, e.Details, e.Stack)
+}
+
+func NewErrorClass(class string) (func(string, ...interface{}) error, func(error) bool) {
+	return func(details string, extra ...interface{}) error {
+			return ErrorWithDetails{
+				ErrorClass: class,
+				Details:    fmt.Sprintf(details, extra...),
+				Stack:      debug.Stack()}
+		},
+		func(err error) bool {
+			error_with_details, ok := err.(ErrorWithDetails)
+			return ok && error_with_details.ErrorClass == class
+		}
+}
 
 var (
-	ConfigIncompleteError          = errors.New("configuration incomplete")
-	DepsChangedError               = errors.New("DEPS changed")
-	EmptyCommandError              = errors.New("empty command")
-	ExternalCommandFailedError     = errors.New("external command failed")
-	InvalidArgumentError           = errors.New("invalid argument")
-	InvalidWrappedMessageTypeError = errors.New("invalid message type during unwrap")
-	InvalidMessageTypeError        = errors.New("invalid message type during wrap")
-	InvalidPlatformError           = errors.New("invalid platform")
-	NoRouteToTargetError           = errors.New("no route to target host")
-	NoTargetError                  = errors.New("no target specified")
-	NoUpstreamError                = errors.New("no upstream configured for this repository")
-	OnlyOnMasterError              = errors.New("command is only available on master")
-	TimedOutError                  = errors.New("timed out")
-	UnmergedChangesExistError      = errors.New("working directory has unmerged changes")
-	UnrecognizedResponseError      = errors.New("server sent an unrecognized response")
-	WorkTreeDirtyError             = errors.New("working directory is dirty")
-	FailedToPushGitBranchError     = errors.New("failed to push git branch")
-	EndpointNotFoundError          = errors.New("endpoint not found")
-	NothingToDoError               = errors.New("nothing to do")
+	NewConfigurationError, IsConfigurationError                         = NewErrorClass("configuration error")
+	NewConfigIncompleteError, IsConfigIncompleteError                   = NewErrorClass("configuration incomplete")
+	NewDepsChangedError, IsDepsChangedError                             = NewErrorClass("DEPS changed")
+	NewEmptyCommandError, IsEmptyCommandError                           = NewErrorClass("empty command")
+	NewExternalCommandFailedError, IsExternalCommandFailedError         = NewErrorClass("external command failed")
+	NewInvalidArgumentError, IsInvalidArgumentError                     = NewErrorClass("invalid argument")
+	NewInvalidWrappedMessageTypeError, IsInvalidWrappedMessageTypeError = NewErrorClass("invalid message type during unwrap")
+	NewInvalidMessageTypeError, IsInvalidMessageTypeError               = NewErrorClass("invalid message type during wrap")
+	NewInvalidPlatformError, IsInvalidPlatformError                     = NewErrorClass("invalid platform")
+	NewNoRouteToTargetError, IsNoRouteToTargetError                     = NewErrorClass("no route to target host")
+	NewNoTargetError, IsNoTargetError                                   = NewErrorClass("no target specified")
+	NewNoUpstreamError, IsNoUpstreamError                               = NewErrorClass("no upstream configured for this repository")
+	NewOnlyOnMasterError, IsOnlyOnMasterError                           = NewErrorClass("command is only available on master")
+	NewTimedOutError, IsTimedOutError                                   = NewErrorClass("timed out")
+	NewUnmergedChangesExistError, IsUnmergedChangesExistError           = NewErrorClass("working directory has unmerged changes")
+	NewUnrecognizedResponseError, IsUnrecognizedResponseError           = NewErrorClass("server sent an unrecognized response")
+	NewWorkTreeDirtyError, IsWorkTreeDirtyError                         = NewErrorClass("working directory is dirty")
+	NewFailedToPushGitBranchError, IsFailedToPushGitBranchError         = NewErrorClass("failed to push git branch")
+	NewEndpointNotFoundError, IsEndpointNotFoundError                   = NewErrorClass("endpoint not found")
+	NewNothingToDoError, IsNothingToDoError                             = NewErrorClass("nothing to do")
 )
-
-type ConfigError struct {
-	ConfigFile  string
-	ErrorString string
-}
-
-func (c ConfigError) Error() string {
-	return fmt.Sprintf("Configuration error: %s: %s", c.ConfigFile, c.ErrorString)
-}

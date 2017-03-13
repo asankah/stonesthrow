@@ -62,7 +62,7 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 	request := args[1].(RequestMessage)
 
 	err := h.handler(ctx, session, request, f)
-	if err == InvalidArgumentError {
+	if IsInvalidArgumentError(err) {
 		return subcommands.ExitUsageError
 	}
 	if err != nil {
@@ -130,7 +130,7 @@ var DefaultHandlers = []CommandHandler{
 					return s.Repository().Execute(ctx, "", "git", "clean", "-n")
 				}
 			}
-			return InvalidArgumentError
+			return NewInvalidArgumentError("Either 'src' or 'out' should be specified")
 		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{
@@ -161,7 +161,7 @@ var DefaultHandlers = []CommandHandler{
 		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
 			if len(req.Arguments) == 0 {
 				s.channel.Error("Need to specify branch")
-				return InvalidArgumentError
+				return NewInvalidArgumentError("No branch specified")
 			}
 			return s.GitFetchFromUpstream(ctx, req.Arguments)
 		}, NO_REVISION, SHOW_IN_HELP},

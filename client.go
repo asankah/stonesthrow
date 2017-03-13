@@ -119,7 +119,9 @@ func RunPassthroughClient(clientConfig, serverConfig Config) error {
 	}
 
 	if endpoint.Host != serverConfig.Host {
-		return InvalidPlatformError
+		return NewInvalidPlatformError(
+			"Currently we only support a single hop for SSH passthrough. " +
+				"Hence the server must host the endpoint.")
 	}
 
 	conn, err := net.Dial(endpoint.Network, endpoint.Address)
@@ -181,7 +183,7 @@ func SendRequestToRemoteServer(e Executor, clientConfig Config, serverConfig Con
 	defer close(handler)
 
 	if !clientConfig.IsValid() || !serverConfig.IsValid() {
-		return ConfigIncompleteError
+		return NewConfigIncompleteError("Client or server configuration is invalid")
 	}
 
 	// First preference is to run the command locally.
@@ -215,5 +217,5 @@ func SendRequestToRemoteServer(e Executor, clientConfig Config, serverConfig Con
 	}
 
 	// We don't try any harder than this.
-	return NoRouteToTargetError
+	return NewNoRouteToTargetError("Target server %s", serverConfig.Host.Name)
 }

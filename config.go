@@ -35,7 +35,7 @@ func (c *Config) newError(s string, v ...interface{}) error {
 	if configFile == "" {
 		configFile = "<unknown configuration file>"
 	}
-	return ConfigError{ConfigFile: configFile, ErrorString: fmt.Sprintf(s, v...)}
+	return NewConfigurationError("Config file: %s: %s", configFile, fmt.Sprintf(s, v...))
 }
 
 func (c *Config) SelectLocalClientConfig(configFile *ConfigurationFile, serverPlatform string, repository string) error {

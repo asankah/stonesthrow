@@ -43,7 +43,7 @@ func WrapMessage(message interface{}) (WrappedMessage, error) {
 		wrapper.ProcessList = &t
 
 	default:
-		return wrapper, InvalidMessageTypeError
+		return wrapper, NewInvalidMessageTypeError("Message %#v", message)
 	}
 
 	return wrapper, nil

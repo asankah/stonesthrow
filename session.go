@@ -51,7 +51,7 @@ func (s *Session) ExecuteSilently(ctx context.Context, workdir string, command .
 func (s *Session) ExecuteWithOutput(ctx context.Context, workdir string, command ...string) (string, error) {
 	// Nothing to do?
 	if len(command) == 0 {
-		return "", EmptyCommandError
+		return "", NewEmptyCommandError("")
 	}
 
 	s.channel.BeginCommand(s.local.Host.Name, workdir, command, false)
@@ -95,13 +95,13 @@ func (s *Session) ExecuteWithOutput(ctx context.Context, workdir string, command
 		return outputString, nil
 	}
 
-	return outputString, ExternalCommandFailedError
+	return outputString, NewExternalCommandFailedError("")
 }
 
 func (s *Session) Execute(ctx context.Context, workDir string, command ...string) error {
 	// Nothing to do?
 	if len(command) == 0 {
-		return EmptyCommandError
+		return NewEmptyCommandError("")
 	}
 
 	s.channel.BeginCommand(s.local.Host.Name, workDir, command, false)
@@ -149,12 +149,12 @@ func (s *Session) Execute(ctx context.Context, workDir string, command ...string
 		return nil
 	}
 
-	return ExternalCommandFailedError
+	return NewExternalCommandFailedError("")
 }
 
 func (s *Session) runMB(ctx context.Context, command ...string) error {
 	if len(command) == 0 {
-		return InvalidArgumentError
+		return NewEmptyCommandError("")
 	}
 
 	arguments := []string{
@@ -254,7 +254,7 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 			time.Sleep(time.Second)
 		}
 		s.channel.Error("Timed out.")
-		return TimedOutError
+		return NewTimedOutError("Couldn't start compiler proxy.")
 	} else {
 		return s.Repository().Execute(
 			ctx, "", path.Join(s.local.Host.GomaPath, "goma_ctl.py"), "ensure_start")
@@ -264,7 +264,7 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 func (s *Session) BuildTargets(ctx context.Context, targets ...string) error {
 	if len(targets) == 0 {
 		s.channel.Error("No targets. Specify 'all' to build all targets. (Not recommended)")
-		return NoTargetError
+		return NewNoTargetError("No target specified for build command")
 	}
 
 	s.EnsureGomaIfNecessary(ctx)
@@ -289,12 +289,12 @@ func (s *Session) BuildTargets(ctx context.Context, targets ...string) error {
 func (s *Session) CleanTargets(ctx context.Context, targets ...string) error {
 	if len(targets) == 0 {
 		s.channel.Error("No targets. Sepcify 'all' to clean all targets.")
-		return NoTargetError
+		return NewNoTargetError("No target specified for clean")
 	}
 
 	for _, target := range targets {
 		if !targetMatcher.MatchString(target) {
-			return InvalidArgumentError
+			return NewInvalidArgumentError("%s is not a valid target", target)
 		}
 	}
 
@@ -331,7 +331,7 @@ func (s *Session) setTestRunnerEnvironment() {
 func (s *Session) RunTestTarget(ctx context.Context, target string, args []string, revision string) error {
 	if len(args) == 0 {
 		s.channel.Error("Specify \"all\" to run all tests")
-		return InvalidArgumentError
+		return NewNoTargetError("")
 	}
 	if len(args) == 1 && args[0] == "all" {
 		args = make([]string, 0)
@@ -350,7 +350,7 @@ func (s *Session) RunTestTarget(ctx context.Context, target string, args []strin
 		case optionMatcher.MatchString(arg):
 			commandLine = append(commandLine, arg)
 		default:
-			return InvalidArgumentError
+			return NewInvalidArgumentError("%s is not a valid argument", arg)
 		}
 	}
 
@@ -385,7 +385,7 @@ func (s *Session) updateGitWorkDir(ctx context.Context, workDir string) error {
 
 func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 	if s.local.Repository.GitConfig.Remote != "" {
-		return NoUpstreamError
+		return NewNoUpstreamError("No upstream configured for repository at %s", s.local.Repository.SourcePath)
 	}
 
 	output, err := s.Repository().ExecuteSilently(ctx, "", "git", "status", "--porcelain",
@@ -396,7 +396,7 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 
 	if output != "" {
 		s.channel.Error("Local modifications exist.")
-		return WorkTreeDirtyError
+		return NewWorkTreeDirtyError("")
 	}
 
 	// Ignoring error here since we should be able to run rebase-update with a
@@ -457,7 +457,7 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 		return err
 	}
 	if len(branches) == 0 {
-		return InvalidArgumentError
+		return NewInvalidArgumentError("No branches specified for 'git push'")
 	}
 
 	localRepository := s.local.Repository
@@ -484,12 +484,12 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 
 	if remoteConfig == nil || remoteRepository == nil {
 		s.channel.Info("Can't determine how to contact repository remote.")
-		return ConfigIncompleteError
+		return NewConfigIncompleteError("Can't route RPC to upstream")
 	}
 
 	if localRepository == remoteRepository {
 		s.channel.Info("The local and remote repositories are the same.")
-		return NothingToDoError
+		return NewNothingToDoError("local == remote")
 	}
 
 	branchConfigs, err := s.Repository().GitGetBranchConfig(ctx, branches,
@@ -532,7 +532,7 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 		branches[0] = "refs/heads/*"
 	}
 	if len(branches) == 0 {
-		return InvalidArgumentError
+		return NewInvalidArgumentError("No branches specified for 'git fetch'")
 	}
 
 	localRepository := s.local.Repository
@@ -560,12 +560,12 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 
 	if remoteConfig == nil || remoteRepository == nil {
 		s.channel.Info("Can't determine how to contact repository remote.")
-		return ConfigIncompleteError
+		return NewConfigIncompleteError("Can't route RPC to remote")
 	}
 
 	if localRepository == remoteRepository {
 		s.channel.Info("The local and remote repositories are the same.")
-		return NothingToDoError
+		return NewNothingToDoError("local == remote")
 	}
 
 	err = s.Repository().Execute(ctx, "", "git", "checkout", "--detach", "origin/master")
@@ -629,7 +629,7 @@ func (s *Session) SendBranchConfigToCaller(ctx context.Context, configs []Branch
 func (s *Session) SendRequestToRemoteServer(request RequestMessage) error {
 	if s.local.Host == s.remote.Host {
 		s.channel.Error("Local and remote hosts are the same. Skipping remote request.")
-		return NothingToDoError
+		return NewNothingToDoError("local == remote")
 	}
 	s.channel.Info(fmt.Sprintf("Sending %s request to remote server %s", request.Command, s.remote.Host.Name))
 	defer s.channel.Info("Done")

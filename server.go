@@ -84,7 +84,7 @@ func (j *SessionTracker) SwapConnectionForSession(id int, conn Connection) error
 	defer j.mut.Unlock()
 	sessionInfo, ok := j.Sessions[id]
 	if !ok {
-		return InvalidArgumentError
+		return NewInvalidArgumentError("No seesion found with ID %d", id)
 	}
 
 	sessionInfo.Session.channel.SwapConnection(conn)
@@ -303,12 +303,12 @@ func (s *Server) Run(local Config) error {
 
 The ID of the job should be specified as the only argument. Any new processes started by the job will use the newly established channel for IO. Use 'jobs' to find the job ID for a long running command.`, nil, NO_REVISION)
 	if !local.IsValid() {
-		return ConfigIncompleteError
+		return NewConfigIncompleteError("Local configuration is invalid")
 	}
 	s.local = local
 	ep := s.local.Platform.EndpointFor(local.Host)
 	if ep == nil {
-		return EndpointNotFoundError
+		return NewEndpointNotFoundError("No endpoint found for platform %s", s.local.PlatformName)
 	}
 
 	log.Printf("Starting server for %s at %s on %s. This is PID %d", local.PlatformName,
