@@ -82,12 +82,12 @@ func (r RepositoryCommands) GitCreateBuilderHead(ctx context.Context) (string, e
 	if len(status.ModifiedFiles) > 0 {
 		command := []string{"git", "update-index", "--"}
 		command = append(command, status.ModifiedFiles...)
-		_, err = r.ExecuteSilently(ctx, "", command...)
+		_, err = r.ExecuteWithOutput(ctx, "", command...)
 		if err != nil {
 			return "", err
 		}
 
-		tree, err = r.ExecuteSilently(ctx, "", "git", "write-tree")
+		tree, err = r.ExecuteWithOutput(ctx, "", "git", "write-tree")
 		if err != nil {
 			return "", err
 		}
@@ -104,11 +104,11 @@ func (r RepositoryCommands) GitCreateBuilderHead(ctx context.Context) (string, e
 		if err != nil {
 			return "", err
 		}
-		revision, err := r.ExecuteSilently(ctx, "", "git", "commit-tree", "-p", headCommit, "-m", "BUILDER_HEAD", tree)
+		revision, err := r.ExecuteWithOutput(ctx, "", "git", "commit-tree", "-p", headCommit, "-m", "BUILDER_HEAD", tree)
 		if err != nil {
 			return "", err
 		}
-		_, err = r.ExecuteSilently(ctx, "", "git", "update-ref", "refs/heads/BUILDER_HEAD", revision)
+		_, err = r.ExecuteWithOutput(ctx, "", "git", "update-ref", "refs/heads/BUILDER_HEAD", revision)
 		if err != nil {
 			return "", err
 		}
@@ -156,7 +156,7 @@ func (r RepositoryCommands) GitPush(ctx context.Context, branches []string, setU
 	}
 	command = append(command, r.branchListToRefspec(ctx, branches)...)
 
-	output, err := r.ExecuteSilently(ctx, "", command...)
+	output, err := r.ExecuteWithOutput(ctx, "", command...)
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)

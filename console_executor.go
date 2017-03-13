@@ -27,6 +27,7 @@ func (c ConsoleExecutor) Execute(ctx context.Context, workdir string, command ..
 	if len(command) == 0 {
 		return NewEmptyCommandError("")
 	}
+	fmt.Printf("Running %s\n", strings.Join(command, " "))
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = workdir
 	cmd.Env = nil
@@ -49,6 +50,7 @@ func (c ConsoleExecutor) ExecuteWithOutput(ctx context.Context,
 	if len(command) == 0 {
 		return "", NewEmptyCommandError("")
 	}
+	fmt.Printf("Running %s\n", strings.Join(command, " "))
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = workdir
 	cmd.Env = nil
