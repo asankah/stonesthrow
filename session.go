@@ -177,7 +177,8 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 			lines := strings.Split(output, "\n")
 			for _, line := range lines {
 				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "Compiler proxy status:") &&
+				if strings.HasPrefix(line, "compiler proxy ") &&
+					strings.Contains(line, " status: ") &&
 					strings.HasSuffix(line, "ok") {
 					s.channel.Info(fmt.Sprintf("Compiler proxy running. %s", line))
 					return nil
@@ -186,7 +187,12 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 
 			if !attemptedToStartGoma {
 				attemptedToStartGoma = true
-				s.CommandAtSourceDir(ctx, append(gomaCommand, "ensure_start")...)
+				// Don't wait for 'goma_ctl.bat ensure_start' to terminate. It won't.
+				cmd := exec.CommandContext(ctx, "cmd.exe", "/c", gomaCommand[0], "ensure_start")
+				err = cmd.Start()
+				if err != nil {
+					return err
+				}
 			}
 			s.channel.Info("Waiting for compiler proxy ...")
 			time.Sleep(time.Second)
