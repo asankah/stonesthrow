@@ -63,7 +63,7 @@ func (s *Session) InvokeMetaBuild(ctx context.Context, flags BuildFlags, command
 			arguments = append(arguments, "--goma-dir", s.local.Host.GomaPath)
 		}
 	} else {
-		arguments = append(arguments, "--skip-build")
+		arguments = append(arguments, "--no-build")
 	}
 	arguments = append(arguments, s.local.GetBuildPath())
 	if len(command) > 1 {
