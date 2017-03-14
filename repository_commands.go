@@ -118,7 +118,7 @@ func (r RepositoryCommands) GitCreateBuilderHead(ctx context.Context) (string, e
 }
 
 func (r RepositoryCommands) GitPushBuilderHead(ctx context.Context) error {
-	_, err := r.GitPush(ctx, []string{"BUILDER_HEAD"}, false)
+	err := r.GitPush(ctx, []string{"BUILDER_HEAD"})
 	return err
 }
 
@@ -141,19 +141,16 @@ func (r RepositoryCommands) branchListToRefspec(ctx context.Context, branches []
 	return refspecs
 }
 
-func (r RepositoryCommands) GitPush(ctx context.Context, branches []string, setUpstream bool) ([]string, error) {
+func (r RepositoryCommands) GitPush(ctx context.Context, branches []string) error {
 	if len(branches) == 0 {
-		return nil, NewInvalidArgumentError("No branches specified for 'git push'")
+		return NewInvalidArgumentError("No branches specified for 'git push'")
 	}
 
 	if r.Repository.GitConfig.Remote == "" {
-		return nil, NewNoUpstreamError("No upstream configured for repository at %s", r.Repository.SourcePath)
+		return NewNoUpstreamError("No upstream configured for repository at %s", r.Repository.SourcePath)
 	}
 
 	command := []string{"git", "push", r.Repository.GitConfig.Remote, "--porcelain", "--thin", "--force"}
-	if setUpstream {
-		command = append(command, "--set-upstream")
-	}
 	command = append(command, r.branchListToRefspec(ctx, branches)...)
 
 	output, err := r.ExecuteWithOutput(ctx, "", command...)
@@ -161,14 +158,14 @@ func (r RepositoryCommands) GitPush(ctx context.Context, branches []string, setU
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "!\t") {
-			return lines, NewFailedToPushGitBranchError("Reslt: %s", line)
+			return NewFailedToPushGitBranchError("Result: %s", line)
 		}
 
 		if line == "Done" {
-			return lines, nil
+			return nil
 		}
 	}
-	return lines, err
+	return err
 }
 
 func (r RepositoryCommands) GitFetch(ctx context.Context, branches []string) error {

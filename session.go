@@ -403,15 +403,10 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 		return err
 	}
 
-	output, err := s.Repository().GitPush(ctx, branches, true)
+	err = s.Repository().GitPush(ctx, branches)
 	if err != nil {
 		return err
 	}
-	s.channel.BeginCommand(s.local.Host.Name, s.local.Repository.SourcePath, []string{"git", "push"}, false)
-	for _, line := range output {
-		s.channel.Send(TerminalOutputMessage{Output: line})
-	}
-	s.channel.Send(EndCommandMessage{})
 
 	return peerSession.SendRequestToRemoteServer(
 		RequestMessage{
