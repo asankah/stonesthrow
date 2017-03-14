@@ -6,10 +6,12 @@ import (
 )
 
 type RepositoryGitConfig struct {
-	SyncableProperties []string    `json:"syncable_properties,omitempty"`
-	Remote             string      `json:"remote,omitempty"`
-	RemoteHostname     string      `json:"hostname,omitempty"`
-	RemoteHost         *HostConfig `json:"-"`
+	SyncableProperties []string `json:"syncable_properties,omitempty"`
+	Remote             string   `json:"remote,omitempty"`
+	RemoteHostname     string   `json:"hostname,omitempty"`
+
+	KnownBranches map[string]string `json:"-"`
+	RemoteHost    *HostConfig       `json:"-"`
 }
 
 type RepositoryConfig struct {
@@ -24,6 +26,7 @@ type RepositoryConfig struct {
 func (r *RepositoryConfig) Normalize(name string, hostConfig *HostConfig) error {
 	r.Host = hostConfig
 	r.Name = name
+	r.GitConfig.KnownBranches = make(map[string]string)
 
 	for platform, platformConfig := range r.Platforms {
 		err := platformConfig.Normalize(platform, r)

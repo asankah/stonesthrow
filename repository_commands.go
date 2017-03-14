@@ -164,6 +164,26 @@ func (r RepositoryCommands) GitPush(ctx context.Context, branches []string) erro
 			return NewFailedToPushGitBranchError("Result: %s", line)
 		}
 
+		if strings.HasPrefix(line, "+\t") || strings.HasPrefix(line, "*\t") || strings.HasPrefix(line, "=\t") {
+			fields := strings.Split(line, "\t")
+			if len(fields) != 3 {
+				continue
+			}
+			refnamesPair := fields[1]
+			refnames := strings.Split(refnamesPair, ":")
+			if len(refnames) != 2 {
+				continue
+			}
+
+			refsPair := fields[2]
+			refs := strings.Split(refsPair, "..")
+			if len(refs) != 2 {
+				continue
+			}
+
+			r.Repository.GitConfig.KnownBranches[refnames[1]] = strings.Trim(refs[1], ".")
+		}
+
 		if line == "Done" {
 			return nil
 		}
