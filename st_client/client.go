@@ -93,7 +93,17 @@ func main() {
 		return
 	}
 
-	executor := stonesthrow.ConsoleExecutor{HideStdout: false}
+	formatter := ConsoleFormatter{config: &serverConfig, porcelain: *porcelain}
+	done := make(chan int)
+	output := make(chan interface{})
+	go func() {
+		for message := range output {
+			formatter.Format(message)
+		}
+		done <- 0
+	}()
+
+	executor := stonesthrow.NewConsoleExecutorForMessageHandler(output, clientConfig.Host.Name)
 	var req stonesthrow.RequestMessage
 	req.Command = arguments[0]
 	req.Arguments = arguments[1:]
@@ -106,16 +116,6 @@ func main() {
 			log.Fatal(err.Error())
 		}
 	}
-
-	formatter := ConsoleFormatter{config: &serverConfig, porcelain: *porcelain}
-	done := make(chan int)
-	output := make(chan interface{})
-	go func() {
-		for message := range output {
-			formatter.Format(message)
-		}
-		done <- 0
-	}()
 
 	err = stonesthrow.SendRequestToRemoteServer(executor, clientConfig, serverConfig, req, output)
 	if err != nil {

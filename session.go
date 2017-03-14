@@ -1,7 +1,6 @@
 package stonesthrow
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -29,127 +28,16 @@ type ProcessRecord struct {
 }
 
 type Session struct {
-	local              Config
-	remote             Config
-	channel            Channel
-	processAdder       ProcessAdder
-	repositoryCommands RepositoryCommands
+	local  Config
+	remote Config
+
+	ConsoleExecutor
 }
 
-func (s *Session) Repository() *RepositoryCommands {
-	if s.repositoryCommands.Repository == nil {
-		s.repositoryCommands.Repository = s.local.Repository
-		s.repositoryCommands.Executor = s
-	}
-	return &s.repositoryCommands
-}
-
-func (s *Session) ExecuteSilently(ctx context.Context, workdir string, command ...string) (string, error) {
-	return RunCommandWithWorkDir(ctx, workdir, command...)
-}
-
-func (s *Session) ExecuteWithOutput(ctx context.Context, workdir string, command ...string) (string, error) {
-	// Nothing to do?
-	if len(command) == 0 {
-		return "", NewEmptyCommandError("")
-	}
-
-	s.channel.BeginCommand(s.local.Host.Name, workdir, command, false)
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-	cmd.Env = nil // inherit
-	cmd.Dir = workdir
-
-	var output bytes.Buffer
-	cmd.Stdout = &output
-
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		s.channel.Error(fmt.Sprintf("Can't open stderr pipe: %s", err.Error()))
-		return "", err
-	}
-
-	quitter := make(chan int)
-	go func() {
-		s.channel.Stream(stderrPipe)
-		quitter <- 2
-	}()
-
-	cmd.Start()
-	if s.processAdder != nil {
-		s.processAdder.AddProcess(command, cmd.Process)
-	}
-	err = cmd.Wait()
-	stderrPipe.Close()
-	<-quitter
-	s.channel.Stream(bytes.NewReader(output.Bytes()))
-
-	outputString := strings.TrimSpace(output.String())
-	if err != nil {
-		return outputString, err
-	}
-	if s.processAdder != nil {
-		s.processAdder.RemoveProcess(cmd.Process, cmd.ProcessState)
-	}
-	s.channel.EndCommand(cmd.ProcessState)
-	if cmd.ProcessState.Success() {
-		return outputString, nil
-	}
-
-	return outputString, NewExternalCommandFailedError("")
-}
-
-func (s *Session) Execute(ctx context.Context, workDir string, command ...string) error {
-	// Nothing to do?
-	if len(command) == 0 {
-		return NewEmptyCommandError("")
-	}
-
-	s.channel.BeginCommand(s.local.Host.Name, workDir, command, false)
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-	cmd.Env = nil // inherit
-	cmd.Dir = workDir
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		s.channel.Error(fmt.Sprintf("Can't open stdout pipe: %s", err.Error()))
-		return err
-	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		s.channel.Error(fmt.Sprintf("Can't open stderr pipe: %s", err.Error()))
-		return err
-	}
-
-	quitter := make(chan int)
-	go func() {
-		s.channel.Stream(stdoutPipe)
-		quitter <- 1
-	}()
-	go func() {
-		s.channel.Stream(stderrPipe)
-		quitter <- 2
-	}()
-
-	cmd.Start()
-	if s.processAdder != nil {
-		s.processAdder.AddProcess(command, cmd.Process)
-	}
-	err = cmd.Wait()
-	stdoutPipe.Close()
-	stderrPipe.Close()
-	<-quitter
-	<-quitter
-	if err != nil {
-		return err
-	}
-	if s.processAdder != nil {
-		s.processAdder.RemoveProcess(cmd.Process, cmd.ProcessState)
-	}
-	s.channel.EndCommand(cmd.ProcessState)
-	if cmd.ProcessState.Success() {
-		return nil
-	}
-
-	return NewExternalCommandFailedError("")
+func (s *Session) Repository() RepositoryCommands {
+	return RepositoryCommands{
+		Repository: s.local.Repository,
+		Executor:   *s}
 }
 
 func (s *Session) runMB(ctx context.Context, command ...string) error {
@@ -499,7 +387,13 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 		return err
 	}
 
-	peerSession := Session{local: s.local, remote: *remoteConfig, channel: s.channel, processAdder: s.processAdder}
+	peerSession := Session{
+		s.local,
+		*remoteConfig,
+		ConsoleExecutor{
+			channel:      s.channel,
+			processAdder: s.processAdder,
+			label:        s.local.Host.Name}}
 	err = peerSession.SendRequestToRemoteServer(
 		RequestMessage{
 			Command:        "__prepare_for_git_push__",
@@ -587,7 +481,13 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 		branchConfigs = append(branchConfigs, BranchConfig{Name: branch, GitConfig: gitConfig})
 	}
 
-	peerSession := Session{local: s.local, remote: *remoteConfig, channel: s.channel, processAdder: s.processAdder}
+	peerSession := Session{
+		s.local,
+		*remoteConfig,
+		ConsoleExecutor{
+			channel:      s.channel,
+			processAdder: s.processAdder,
+			label:        s.local.Host.Name}}
 	err = peerSession.SendRequestToRemoteServer(
 		RequestMessage{
 			Command:        "__get_branch_config__",

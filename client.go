@@ -23,10 +23,13 @@ func runClientWithReaderWriter(
 
 	channel := Channel{conn: wrappedConn}
 
-	reverseClientChannel := Channel{conn: localStaticConnection{ResponseSink: handler}}
+	reverseClientChannel := Channel{conn: LocalStaticConnection{ResponseSink: handler}}
 	reverseClientSession := Session{
-		local: clientConfig, remote: serverConfig,
-		channel: reverseClientChannel, processAdder: nil}
+		clientConfig, serverConfig,
+		ConsoleExecutor{
+			channel:      reverseClientChannel,
+			processAdder: nil,
+			label:        clientConfig.Host.Name}}
 
 	for {
 		response, err := channel.Receive()
@@ -63,49 +66,11 @@ func runWithLocalEndpoint(
 	return runClientWithReaderWriter(clientConfig, serverConfig, request, handler, conn, conn)
 }
 
-type localStaticConnection struct {
-	ResponseSink chan interface{}
-}
-
-func (l localStaticConnection) Receive() (interface{}, error) {
-	return nil, io.EOF
-}
-
-func (l localStaticConnection) Send(message interface{}) error {
-	switch t := message.(type) {
-	case TerminalOutputMessage:
-		l.ResponseSink <- &t
-
-	case InfoMessage:
-		l.ResponseSink <- &t
-
-	case ErrorMessage:
-		l.ResponseSink <- &t
-
-	case BeginCommandMessage:
-		l.ResponseSink <- &t
-
-	case EndCommandMessage:
-		l.ResponseSink <- &t
-
-	case CommandListMessage:
-		l.ResponseSink <- &t
-
-	case JobListMessage:
-		l.ResponseSink <- &t
-
-	case RequestMessage:
-		l.ResponseSink <- &t
-	}
-	return nil
-}
-
-func (l localStaticConnection) Close() {}
-
 func runLocallyWithoutServer(serverConfig Config, request RequestMessage, handler chan interface{}) error {
-	connection := localStaticConnection{ResponseSink: handler}
+	connection := LocalStaticConnection{ResponseSink: handler}
 	channel := Channel{conn: connection}
-	session := Session{local: serverConfig, remote: serverConfig, channel: channel, processAdder: nil}
+	session := Session{serverConfig, serverConfig,
+		ConsoleExecutor{channel: channel, processAdder: nil, label: serverConfig.Host.Name}}
 	HandleRequestOnLocalHost(context.Background(), &session, request)
 	return nil
 }

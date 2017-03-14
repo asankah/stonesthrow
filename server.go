@@ -259,10 +259,12 @@ func (s *Server) runSessionWithConnection(ctx context.Context, c io.ReadWriter, 
 	s.sessionTracker.AddSession(&sessionInfo)
 
 	sessionInfo.Session = &Session{
-		local:        s.local,
-		remote:       remoteConfig,
-		channel:      channel,
-		processAdder: s.sessionTracker.GetSessionProcessAdder(&sessionInfo)}
+		s.local,
+		remoteConfig,
+		ConsoleExecutor{
+			channel:      channel,
+			processAdder: s.sessionTracker.GetSessionProcessAdder(&sessionInfo),
+			label:        s.local.Host.Name}}
 
 	log.Printf("Dispatching request %s", req.Command)
 	HandleRequestOnLocalHost(ctx, sessionInfo.Session, *req)
