@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-type ConsoleExecutor struct {
+type ChannelExecutor struct {
 	processAdder ProcessAdder
 	channel      Channel
 	label        string
@@ -20,18 +20,14 @@ const (
 	MaxReadBufferSize = 1024 * 1024 * 1024
 )
 
-func NewConsoleExecutorForMessageHandler(handler chan interface{}, label string) ConsoleExecutor {
-	return ConsoleExecutor{
+func NewChannelExecutorFromMessageHandler(handler chan interface{}, label string) ChannelExecutor {
+	return ChannelExecutor{
 		channel:      Channel{conn: LocalStaticConnection{ResponseSink: handler}},
 		processAdder: nil,
 		label:        label}
 }
 
-func (c ConsoleExecutor) ExecuteSilently(ctx context.Context, workdir string, command ...string) (string, error) {
-	return RunCommandWithWorkDir(ctx, workdir, command...)
-}
-
-func (c ConsoleExecutor) execute(ctx context.Context, workdir string, captureStdout bool, command ...string) (string, error) {
+func (c ChannelExecutor) execute(ctx context.Context, workdir string, captureStdout bool, command ...string) (string, error) {
 	// Nothing to do?
 	if len(command) == 0 {
 		return "", NewEmptyCommandError("")
@@ -102,13 +98,29 @@ func (c ConsoleExecutor) execute(ctx context.Context, workdir string, captureStd
 	return outputString, NewExternalCommandFailedError("")
 }
 
-func (c ConsoleExecutor) Execute(ctx context.Context, workdir string, command ...string) error {
+func (c ChannelExecutor) ExecuteInWorkDirNoStream(workdir string, ctx context.Context, command ...string) (string, error) {
+	return RunCommandWithWorkDir(ctx, workdir, command...)
+}
+
+func (c ChannelExecutor) ExecuteInWorkDir(workdir string, ctx context.Context, command ...string) (string, error) {
+	return c.execute(ctx, workdir, true, command...)
+}
+
+func (c ChannelExecutor) ExecuteInWorkDirPassthrough(workdir string, ctx context.Context, command ...string) error {
 	_, err := c.execute(ctx, workdir, false, command...)
 	return err
 }
 
-func (c ConsoleExecutor) ExecuteWithOutput(ctx context.Context, workdir string, command ...string) (string, error) {
-	return c.execute(ctx, workdir, true, command...)
+func (c ChannelExecutor) ExecutePassthrough(ctx context.Context, command ...string) error {
+	return NewInvalidArgumentError("Need workdir")
+}
+
+func (c ChannelExecutor) ExecuteNoStream(ctx context.Context, command ...string) (string, error) {
+	return "", NewInvalidArgumentError("Need workdir")
+}
+
+func (c ChannelExecutor) Execute(ctx context.Context, command ...string) (string, error) {
+	return "", NewInvalidArgumentError("Need workdir")
 }
 
 func RunCommandWithWorkDir(ctx context.Context, workdir string, command ...string) (string, error) {

@@ -1,7 +1,6 @@
 package stonesthrow
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -64,10 +63,6 @@ func (p *PlatformConfig) Validate() error {
 		return fmt.Errorf("Platform not normalized")
 	}
 	return nil
-}
-
-func (p *PlatformConfig) RunHere(ctx context.Context, e Executor, command ...string) (string, error) {
-	return e.ExecuteSilently(ctx, p.BuildPath, command...)
 }
 
 func (p *PlatformConfig) GetAllTargets(testOnly bool) (map[string]Command, error) {

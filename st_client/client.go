@@ -103,7 +103,7 @@ func main() {
 		done <- 0
 	}()
 
-	executor := stonesthrow.NewConsoleExecutorForMessageHandler(output, clientConfig.Host.Name)
+	executor := stonesthrow.NewChannelExecutorFromMessageHandler(output, clientConfig.Host.Name)
 	var req stonesthrow.RequestMessage
 	req.Command = arguments[0]
 	req.Arguments = arguments[1:]

@@ -26,7 +26,7 @@ func runClientWithReaderWriter(
 	reverseClientChannel := Channel{conn: LocalStaticConnection{ResponseSink: handler}}
 	reverseClientSession := Session{
 		clientConfig, serverConfig,
-		ConsoleExecutor{
+		ChannelExecutor{
 			channel:      reverseClientChannel,
 			processAdder: nil,
 			label:        clientConfig.Host.Name}}
@@ -70,7 +70,7 @@ func runLocallyWithoutServer(serverConfig Config, request RequestMessage, handle
 	connection := LocalStaticConnection{ResponseSink: handler}
 	channel := Channel{conn: connection}
 	session := Session{serverConfig, serverConfig,
-		ConsoleExecutor{channel: channel, processAdder: nil, label: serverConfig.Host.Name}}
+		ChannelExecutor{channel: channel, processAdder: nil, label: serverConfig.Host.Name}}
 	HandleRequestOnLocalHost(context.Background(), &session, request)
 	return nil
 }

@@ -27,11 +27,14 @@ type ProcessRecord struct {
 	UserTime   time.Duration
 }
 
+// A Session is where the work happens. Everything else is just plumbing.
+//
+// Any code that makes a change should be run within a session.
 type Session struct {
-	local  Config
-	remote Config
+	local  Config // Config describing the local end. This is where the work happens.
+	remote Config // Config describing the peer end.
 
-	ConsoleExecutor
+	ChannelExecutor
 }
 
 func (s *Session) Repository() RepositoryCommands {
@@ -40,20 +43,33 @@ func (s *Session) Repository() RepositoryCommands {
 		Executor:   *s}
 }
 
-func (s *Session) runMB(ctx context.Context, command ...string) error {
+type BuildFlags int
+
+const (
+	INCLUDE_BUILD_ARGS BuildFlags = iota
+	SKIP_BUILD_ARGS
+)
+
+func (s *Session) InvokeMetaBuild(ctx context.Context, flags BuildFlags, command ...string) error {
 	if len(command) == 0 {
 		return NewEmptyCommandError("")
 	}
 
-	arguments := []string{
-		"python", s.local.GetSourcePath("tools", "mb", "mb.py"),
-		command[0], s.local.GetBuildPath(),
-		"--config=" + s.local.Platform.MbConfigName}
-	if s.local.Host.GomaPath != "" {
-		arguments = append(arguments, "--goma-dir", s.local.Host.GomaPath)
+	arguments := []string{"python", s.local.GetSourcePath("tools", "mb", "mb.py")}
+
+	if flags == INCLUDE_BUILD_ARGS {
+		arguments = append(arguments, "--config="+s.local.Platform.MbConfigName)
+		if s.local.Host.GomaPath != "" {
+			arguments = append(arguments, "--goma-dir", s.local.Host.GomaPath)
+		}
+	} else {
+		arguments = append(arguments, "--skip-build")
 	}
-	arguments = append(arguments, command[1:]...)
-	return s.Repository().Execute(ctx, "", arguments...)
+	arguments = append(arguments, command[0], s.local.GetBuildPath())
+	if len(command) > 1 {
+		arguments = append(arguments, command[1:]...)
+	}
+	return s.Repository().ExecutePassthrough(ctx, arguments...)
 }
 
 func ShortTargetNameFromGNLabel(label string) string {
@@ -86,7 +102,7 @@ func (s *Session) RunGclientSync(ctx context.Context) error {
 	if s.local.PlatformName == "mac" {
 		os.Setenv("FORCE_MAC_TOOLCHAIN", "1")
 	}
-	return s.Repository().Execute(ctx, "", "gclient", "sync")
+	return s.ExecuteInWorkDirPassthrough(s.local.GetSourcePath(), ctx, "gclient", "sync")
 }
 
 func (s *Session) PrepareBuild(ctx context.Context) error {
@@ -96,7 +112,7 @@ func (s *Session) PrepareBuild(ctx context.Context) error {
 			return err
 		}
 	}
-	return s.runMB(ctx, "gen")
+	return s.InvokeMetaBuild(ctx, INCLUDE_BUILD_ARGS, "gen")
 }
 
 func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
@@ -112,9 +128,8 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 
 	if s.local.PlatformName == "win" {
 		attemptedToStartGoma := false
-		gomaCommand := []string{path.Join(s.local.Host.GomaPath, "goma_ctl.bat")}
 		for i := 0; i < 5; i += 1 {
-			output, err := s.Repository().ExecuteSilently(ctx, "", append(gomaCommand, "status")...)
+			output, err := s.ExecuteInWorkDirNoStream(s.local.Host.GomaPath, ctx, "goma_ctl.bat", "status")
 			if err != nil {
 				return err
 			}
@@ -131,9 +146,10 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 
 			if !attemptedToStartGoma {
 				attemptedToStartGoma = true
-				// Don't wait for 'goma_ctl.bat ensure_start' to terminate. It won't.
+				gomaCommand := []string{path.Join(s.local.Host.GomaPath, "goma_ctl.bat")}
 				cmd := exec.CommandContext(ctx, "cmd.exe", "/c", gomaCommand[0], "ensure_start")
 				err = cmd.Start()
+				// Don't wait for 'goma_ctl.bat ensure_start' to terminate. It won't.
 				if err != nil {
 					return err
 				}
@@ -144,8 +160,7 @@ func (s *Session) EnsureGomaIfNecessary(ctx context.Context) error {
 		s.channel.Error("Timed out.")
 		return NewTimedOutError("Couldn't start compiler proxy.")
 	} else {
-		return s.Repository().Execute(
-			ctx, "", path.Join(s.local.Host.GomaPath, "goma_ctl.py"), "ensure_start")
+		return s.ExecuteInWorkDirPassthrough(s.local.Host.GomaPath, ctx, "goma_ctl.py", "ensure_start")
 	}
 }
 
@@ -166,12 +181,12 @@ func (s *Session) BuildTargets(ctx context.Context, targets ...string) error {
 		}
 	}
 
-	command := []string{"ninja", "-C", s.local.GetBuildPath()}
+	command := []string{"ninja"}
 	if s.local.Host.MaxBuildJobs != 0 {
 		command = append(command, "-j", fmt.Sprintf("%d", s.local.Host.MaxBuildJobs))
 	}
 	command = append(command, targets...)
-	return s.Repository().Execute(ctx, "", command...)
+	return s.ExecuteInWorkDirPassthrough(s.local.GetBuildPath(), ctx, command...)
 }
 
 func (s *Session) CleanTargets(ctx context.Context, targets ...string) error {
@@ -186,9 +201,9 @@ func (s *Session) CleanTargets(ctx context.Context, targets ...string) error {
 		}
 	}
 
-	command := []string{"ninja", "-C", s.local.GetBuildPath(), "-t", "clean"}
+	command := []string{"ninja", "-t", "clean"}
 	command = append(command, targets...)
-	return s.Repository().Execute(ctx, "", command...)
+	return s.ExecuteInWorkDirPassthrough(s.local.GetBuildPath(), ctx, command...)
 }
 
 func (s *Session) Clobber(ctx context.Context, force bool) error {
@@ -225,7 +240,7 @@ func (s *Session) RunTestTarget(ctx context.Context, target string, args []strin
 		args = make([]string, 0)
 	}
 
-	commandLine := []string{"run", target, "--no-build", "--"}
+	commandLine := []string{"run", target, "--"}
 	testFilters := make([]string, 0)
 
 	for _, arg := range args {
@@ -255,20 +270,20 @@ func (s *Session) RunTestTarget(ctx context.Context, target string, args []strin
 		return err
 	}
 	s.setTestRunnerEnvironment()
-	return s.runMB(ctx, commandLine...)
+	return s.InvokeMetaBuild(ctx, SKIP_BUILD_ARGS, commandLine...)
 }
 
 func (s *Session) GitStatus(ctx context.Context) error {
-	return s.Repository().Execute(ctx, "", "git", "status")
+	return s.Repository().ExecutePassthrough(ctx, "git", "status")
 }
 
 func (s *Session) updateGitWorkDir(ctx context.Context, workDir string) error {
-	err := s.Execute(ctx, workDir, "git", "checkout", "origin/master")
+	err := s.ExecuteInWorkDirPassthrough(workDir, ctx, "git", "checkout", "origin/master")
 	if err != nil {
 		return err
 	}
 
-	return s.Execute(ctx, workDir, "git", "pull", "origin", "master")
+	return s.ExecuteInWorkDirPassthrough(workDir, ctx, "git", "pull", "origin", "master")
 }
 
 func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
@@ -276,13 +291,12 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 		return NewNoUpstreamError("No upstream configured for repository at %s", s.local.Repository.SourcePath)
 	}
 
-	output, err := s.Repository().ExecuteSilently(ctx, "", "git", "status", "--porcelain",
-		"--untracked-files=normal")
+	status, err := s.Repository().GitStatus(ctx)
 	if err != nil {
 		return err
 	}
 
-	if output != "" {
+	if status.HasModified {
 		s.channel.Error("Local modifications exist.")
 		return NewWorkTreeDirtyError("")
 	}
@@ -290,7 +304,7 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 	// Ignoring error here since we should be able to run rebase-update with a
 	// detached head. If there's no symolic ref, then we'll skip the final
 	// checkout step.
-	previousHead, _ := s.Repository().ExecuteSilently(ctx, "", "git", "symbolic-ref", "-q", "HEAD")
+	previousHead, _ := s.Repository().GitCurrentBranch(ctx)
 
 	if fetch {
 		s.channel.Info("Updating clank")
@@ -311,11 +325,11 @@ func (s *Session) GitRebaseUpdate(ctx context.Context, fetch bool) error {
 		}
 	}
 
-	err = s.Repository().Execute(ctx, "", "git", "clean", "-f")
-	err = s.Repository().Execute(ctx, "", "git", "rebase-update",
+	err = s.Repository().ExecutePassthrough(ctx, "git", "clean", "-f")
+	err = s.Repository().ExecutePassthrough(ctx, "git", "rebase-update",
 		"--no-fetch", "--keep-going")
 	if previousHead != "" {
-		s.Repository().Execute(ctx, "", "git", "checkout", previousHead)
+		s.Repository().ExecutePassthrough(ctx, "git", "checkout", previousHead)
 	}
 
 	return err
@@ -390,7 +404,7 @@ func (s *Session) GitPushToUpstream(ctx context.Context, branches []string) erro
 	peerSession := Session{
 		s.local,
 		*remoteConfig,
-		ConsoleExecutor{
+		ChannelExecutor{
 			channel:      s.channel,
 			processAdder: s.processAdder,
 			label:        s.local.Host.Name}}
@@ -457,7 +471,7 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 		return NewNothingToDoError("local == remote")
 	}
 
-	err = s.Repository().Execute(ctx, "", "git", "checkout", "--detach", "origin/master")
+	err = s.Repository().ExecutePassthrough(ctx, "git", "checkout", "--detach", "origin/master")
 	if err != nil {
 		return err
 	}
@@ -479,7 +493,7 @@ func (s *Session) GitFetchFromUpstream(ctx context.Context, branches []string) e
 	peerSession := Session{
 		s.local,
 		*remoteConfig,
-		ConsoleExecutor{
+		ChannelExecutor{
 			channel:      s.channel,
 			processAdder: s.processAdder,
 			label:        s.local.Host.Name}}

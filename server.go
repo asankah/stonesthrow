@@ -261,7 +261,7 @@ func (s *Server) runSessionWithConnection(ctx context.Context, c io.ReadWriter, 
 	sessionInfo.Session = &Session{
 		s.local,
 		remoteConfig,
-		ConsoleExecutor{
+		ChannelExecutor{
 			channel:      channel,
 			processAdder: s.sessionTracker.GetSessionProcessAdder(&sessionInfo),
 			label:        s.local.Host.Name}}
