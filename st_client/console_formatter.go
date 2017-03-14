@@ -80,12 +80,12 @@ func (f *ConsoleFormatter) AddPathRemappers() {
 		return "//" + normalizePathSeparators(s[relLen:])
 	}
 
-	re2 := regexp.MustCompile(`[^\w/\-]\.\.\\\.\.\\[\w/\\\-]*`)
+	re2 := regexp.MustCompile(`(?:[^\w/\-]|^)\.\.\\\.\.\\[\w/\\\-]*`)
 	f.AddFilter(func(s string) string {
 		return re2.ReplaceAllStringFunc(s, relPathRewriter)
 	})
 
-	re4 := regexp.MustCompile(`[^\w/\-]\.\./\.\./([\w/\-]*)`)
+	re4 := regexp.MustCompile(`(?:[^\w/\-]|^)\.\./\.\./([\w/\-]*)`)
 	f.AddFilter(func(s string) string {
 		return re4.ReplaceAllStringFunc(s, relPathRewriter)
 	})
@@ -106,19 +106,34 @@ func (f *ConsoleFormatter) AddNinjaFilters() {
 		` (CC|CXX|OBJCXX) `,
 		CSourceBuildStep(" $1 "))
 	f.AddRegExpReplace(
-		` (STAMP|ACTION|AR|LINK|SOLINK|RC|LIB|LIBTOOL|LIBTOOL-STATIC|LINK\(DLL\)|ASM) `,
+		` (STAMP|ACTION|AR|LINK|SOLINK|RC|LIB|LIBTOOL|LIBTOOL-STATIC|LINK\(DLL\)|ASM|COPY) `,
 		CAuxBuildStep(" $1 "))
 	f.DimProgress()
 }
 
+func (f *ConsoleFormatter) AddTestFilters() {
+	f.AddPathRemappers()
+	f.AddRegExpReplace(regexp.QuoteMeta("[ RUN      ]")+" ([^ ]*)",
+		"[ "+CActionLabel("RUN")+"      ] "+CSubject("$1"))
+	f.AddRegExpReplace(regexp.QuoteMeta("[  FAILED  ]")+" ([^ ]*)",
+		"[  "+CError("FAILED")+"  ] "+CSubject("$1"))
+	f.AddRegExpReplace(`^(.*)\((.*)\): `,
+		CSubject("$1")+"("+CLocation("$2")+"): ")
+	f.DimProgress()
+}
+
 func (f *ConsoleFormatter) SetupFilterChainForCommand(command []string) {
+	wholeCommand := "^" + strings.Join(command, "^") + "^"
 	f.filterChain = nil
 	switch {
 	case len(command) == 0:
 		return
 
-	case strings.Contains(command[0], "ninja"):
+	case strings.Contains(wholeCommand, "^ninja^"):
 		f.AddNinjaFilters()
+
+	case strings.Contains(wholeCommand, "tests^"):
+		f.AddTestFilters()
 	}
 }
 

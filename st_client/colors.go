@@ -13,4 +13,5 @@ var (
 	CLocation        = ansi.ColorFunc("3")
 	CSourceBuildStep = ansi.ColorFunc("34")
 	CAuxBuildStep    = ansi.ColorFunc("214")
+	CActionLabel     = ansi.ColorFunc("34")
 )
