@@ -55,7 +55,7 @@ func (s *Session) InvokeMetaBuild(ctx context.Context, flags BuildFlags, command
 		return NewEmptyCommandError("")
 	}
 
-	arguments := []string{"python", s.local.GetSourcePath("tools", "mb", "mb.py")}
+	arguments := []string{"python", s.local.GetSourcePath("tools", "mb", "mb.py"), command[0]}
 
 	if flags == INCLUDE_BUILD_ARGS {
 		arguments = append(arguments, "--config="+s.local.Platform.MbConfigName)
@@ -65,7 +65,7 @@ func (s *Session) InvokeMetaBuild(ctx context.Context, flags BuildFlags, command
 	} else {
 		arguments = append(arguments, "--skip-build")
 	}
-	arguments = append(arguments, command[0], s.local.GetBuildPath())
+	arguments = append(arguments, s.local.GetBuildPath())
 	if len(command) > 1 {
 		arguments = append(arguments, command[1:]...)
 	}
