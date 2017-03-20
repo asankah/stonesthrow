@@ -34,7 +34,7 @@ type Session struct {
 	local  Config // Config describing the local end. This is where the work happens.
 	remote Config // Config describing the peer end.
 
-	ChannelExecutor
+	JobEventExecutor
 }
 
 func (s *Session) Repository() RepositoryCommands {

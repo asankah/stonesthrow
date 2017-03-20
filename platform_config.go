@@ -44,7 +44,12 @@ func (p *PlatformConfig) Normalize(name string, repo *RepositoryConfig) error {
 }
 
 func (p *PlatformConfig) EndpointFor(host *HostConfig) *Endpoint {
-	for _, ep := range p.Endpoints {
+	ep, ok := p.Endpoints[host.Name]
+	if ok && ep.Host == host {
+		return &ep
+	}
+
+	for _, ep = range p.Endpoints {
 		if ep.Host == host {
 			return &ep
 		}

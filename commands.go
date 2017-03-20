@@ -4,12 +4,13 @@ import (
 	"context"
 	"flag"
 	"github.com/google/subcommands"
+	"google.golang.org/grpc"
 	"io"
 	"sync"
 )
 
 type FlagSetter func(*flag.FlagSet)
-type RequestHandler func(context.Context, *Session, RequestMessage, *flag.FlagSet) error
+type RequestHandler func(context.Context, *grpc.ClientConn, *flag.FlagSet) error
 
 type NeedsRevision bool
 type ShowInHelp bool
@@ -58,10 +59,9 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 		return subcommands.ExitFailure
 	}
 
-	session := args[0].(*Session)
-	request := args[1].(RequestMessage)
+	conn := args[0].(*grpc.ClientConn)
 
-	err := h.handler(ctx, session, request, f)
+	err := h.handler(ctx, conn, f)
 	if IsInvalidArgumentError(err) {
 		return subcommands.ExitUsageError
 	}
@@ -86,8 +86,20 @@ var DefaultHandlers = []CommandHandler{
 	CommandHandler{
 		"branch",
 		`List local branches.`, "", nil,
-		func(ctx context.Context, s *Session, req RequestMessage, f *flag.FlagSet) error {
-			return s.Repository().ExecutePassthrough(ctx, "git", "branch", "--list", "-vvv")
+		func(ctx context.Context, sink OutputSink, client_config Config, conn *grpc.ClientConn, f *flag.FlagSet) error {
+			repo_host_client := NewRepositoryHostClient(conn)
+			repo_state, err := GetRepositoryState(ctx, client_config.Repository,
+				NewJobEventExecutor(client_config.Host.Name, nil, sink))
+			if err != nil {
+				return err
+			}
+			repo_info, err := repo_host_client.GetBranchConfig(ctx, repo_state)
+
+			if err != nil {
+				return err
+			}
+			sink.SendRepositoryInfo(repo_info)
+			return nil
 		}, NO_REVISION, SHOW_IN_HELP},
 
 	CommandHandler{

@@ -1,6 +1,10 @@
+// Generate with 'protoc --go_out=plugins=grpc:. *.proto
+
 syntax = "proto3";
 
 package stonesthrow;
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
 
 message ShellCommand {
   repeated string command = 1;
@@ -11,8 +15,8 @@ message ShellCommand {
 message ShellTask {
   ShellCommand command = 1;
   RunState state = 2;
-  int64 system_time_ns = 3;
-  int64 user_time_ns = 4;
+  google.protobuf.Duration system_time = 3;
+  google.protobuf.Duration user_time = 4;
 }
 
 message RepositoryState {
@@ -21,9 +25,9 @@ message RepositoryState {
 }
 
 message RunState {
-  int64 start_time = 1;
+  google.protobuf.Timestamp start_time = 1;
   bool running = 2;
-  int64 end_time = 3;
+  google.protobuf.Timestamp end_time = 3;
 }
 
 message BuilderJob {
@@ -38,8 +42,8 @@ message BuilderJobs {
   repeated BuilderJob jobs = 1;
 }
 
-message GitBranchInfo {
-  message GitBranch {
+message GitRepositoryInfo {
+  message Branch {
     string name = 1;
     string revision = 2;
     int32 revisions_ahead = 3;
@@ -47,8 +51,14 @@ message GitBranchInfo {
     map<string, string> config = 5;
   }
 
-  repeated GitBranch branches = 1;
-  repeated string upstream = 2;
+  message Upstream {
+    string name = 1;
+    string push_url = 2;
+    string fetch_url = 3;
+  }
+
+  repeated Branch branches = 1;
+  repeated Upstream upstreams = 2;
 }
 
 message LogEvent {
@@ -78,8 +88,8 @@ message CommandOutputEvent {
 
 message EndCommandEvent {
   int32 return_code = 1;
-  int64 system_time_ns = 2;
-  int64 user_time_ns = 3;
+  google.protobuf.Duration system_time = 2;
+  google.protobuf.Duration user_time =3;
 }
 
 message GitBranchTaskEvent {
@@ -94,11 +104,13 @@ message GitBranchTaskEvent {
 }
 
 message JobEvent {
-  LogEvent log_event = 1;
-  BeginCommandEvent begin_command_event = 2;
-  CommandOutputEvent command_output_event = 3;
-  EndCommandEvent end_command_event = 4;
-  GitBranchTaskEvent branch_task_event = 5;
+  google.protobuf.Timestamp time = 1;
+
+  LogEvent log_event = 2;
+  BeginCommandEvent begin_command_event = 3;
+  CommandOutputEvent command_output_event = 4;
+  EndCommandEvent end_command_event = 5;
+  GitBranchTaskEvent branch_task_event = 6;
 }
 
 message BuildOptions {
@@ -106,13 +118,18 @@ message BuildOptions {
   RepositoryState repository_state = 2;
 }
 
-message RunOptions {
-  ShellCommand command = 1;
-  RepositoryState repository_state = 2;
-}
-
 message TargetList {
   repeated string target = 1;
+}
+
+message BranchList {
+  repeated string branch = 1;
+}
+
+message RunOptions {
+  ShellCommand command = 1;
+  TargetList dependencies = 2;
+  RepositoryState repository_state = 3;
 }
 
 service PlatformBuildHost {
@@ -127,17 +144,17 @@ service PlatformBuildHost {
 }
 
 service RepositoryHost {
-  rpc GetBranchConfig(RepositoryState) returns (GitBranchInfo);
-  rpc SetBranchConfig(GitBranchInfo) returns (stream JobEvent);
-  rpc PullFromUpstream(GitBranchInfo) returns (stream JobEvent);
-  rpc PushToUpstream(GitBranchInfo) returns (stream JobEvent);
+  rpc GetBranchConfig(RepositoryState) returns (GitRepositoryInfo);
+  rpc SetBranchConfig(GitRepositoryInfo) returns (stream JobEvent);
+  rpc PullFromUpstream(BranchList) returns (stream JobEvent);
+  rpc PushToUpstream(BranchList) returns (stream JobEvent);
   rpc Status(RepositoryState) returns (stream JobEvent);
   rpc SyncLocal(RepositoryState) returns (stream JobEvent);
-  rpc Sync(RepositoryState) returns (stream JobEvent);
+  rpc SyncRemote(RepositoryState) returns (stream JobEvent);
   rpc PrepareForReceive(RepositoryState) returns (stream JobEvent);
 }
 
-service ServiceControl {
+service ServiceHost {
   rpc Shutdown(RepositoryState) returns (stream JobEvent);
   rpc SelfUpdate(RepositoryState) returns (stream JobEvent) ;
 }

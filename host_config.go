@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+type CertificateConfig struct {
+	CaCertFile     string `json:"ca,omitempty"`
+	ServerKeyFile  string `json:"key,omitempty"`
+	ServerCertFile string `json:"server,omitempty"`
+}
+
 type HostConfig struct {
 	Alias           []string                          `json:"alias,omitempty"`
 	Repositories    map[string]*RepositoryConfig      `json:"repositories,omitempty"`
@@ -12,6 +18,7 @@ type HostConfig struct {
 	StonesthrowPath string                            `json:"stonesthrow,omitempty"`
 	MaxBuildJobs    int                               `json:"max_build_jobs,omitempty"`
 	Remotes         map[string]*RemoteTransportConfig `json:"remotes,omitempty"`
+	Certificates    *CertificateConfig                `json:"certificates,omitempty"`
 
 	Name              string            `json:"-"`
 	DefaultRepository *RepositoryConfig `json:"-"`
