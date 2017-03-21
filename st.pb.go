@@ -10,7 +10,6 @@ It is generated from these files:
 
 It has these top-level messages:
 	ShellCommand
-	ShellTask
 	RepositoryState
 	RunState
 	BuilderJob
@@ -26,6 +25,9 @@ It has these top-level messages:
 	TargetList
 	BranchList
 	RunOptions
+	ClobberOptions
+	PingOptions
+	PingResult
 */
 package stonesthrow
 
@@ -73,7 +75,7 @@ var LogEvent_Severity_value = map[string]int32{
 func (x LogEvent_Severity) String() string {
 	return proto.EnumName(LogEvent_Severity_name, int32(x))
 }
-func (LogEvent_Severity) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{7, 0} }
+func (LogEvent_Severity) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{6, 0} }
 
 type CommandOutputEvent_Stream int32
 
@@ -94,7 +96,7 @@ var CommandOutputEvent_Stream_value = map[string]int32{
 func (x CommandOutputEvent_Stream) String() string {
 	return proto.EnumName(CommandOutputEvent_Stream_name, int32(x))
 }
-func (CommandOutputEvent_Stream) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{9, 0} }
+func (CommandOutputEvent_Stream) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{8, 0} }
 
 type GitBranchTaskEvent_Result int32
 
@@ -116,8 +118,29 @@ func (x GitBranchTaskEvent_Result) String() string {
 	return proto.EnumName(GitBranchTaskEvent_Result_name, int32(x))
 }
 func (GitBranchTaskEvent_Result) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor0, []int{11, 0}
+	return fileDescriptor0, []int{10, 0}
 }
+
+type ClobberOptions_Target int32
+
+const (
+	ClobberOptions_SOURCE ClobberOptions_Target = 0
+	ClobberOptions_OUTPUT ClobberOptions_Target = 1
+)
+
+var ClobberOptions_Target_name = map[int32]string{
+	0: "SOURCE",
+	1: "OUTPUT",
+}
+var ClobberOptions_Target_value = map[string]int32{
+	"SOURCE": 0,
+	"OUTPUT": 1,
+}
+
+func (x ClobberOptions_Target) String() string {
+	return proto.EnumName(ClobberOptions_Target_name, int32(x))
+}
+func (ClobberOptions_Target) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{16, 0} }
 
 type ShellCommand struct {
 	Command   []string `protobuf:"bytes,1,rep,name=command" json:"command,omitempty"`
@@ -151,46 +174,6 @@ func (m *ShellCommand) GetHost() string {
 	return ""
 }
 
-type ShellTask struct {
-	Command    *ShellCommand             `protobuf:"bytes,1,opt,name=command" json:"command,omitempty"`
-	State      *RunState                 `protobuf:"bytes,2,opt,name=state" json:"state,omitempty"`
-	SystemTime *google_protobuf.Duration `protobuf:"bytes,3,opt,name=system_time,json=systemTime" json:"system_time,omitempty"`
-	UserTime   *google_protobuf.Duration `protobuf:"bytes,4,opt,name=user_time,json=userTime" json:"user_time,omitempty"`
-}
-
-func (m *ShellTask) Reset()                    { *m = ShellTask{} }
-func (m *ShellTask) String() string            { return proto.CompactTextString(m) }
-func (*ShellTask) ProtoMessage()               {}
-func (*ShellTask) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
-
-func (m *ShellTask) GetCommand() *ShellCommand {
-	if m != nil {
-		return m.Command
-	}
-	return nil
-}
-
-func (m *ShellTask) GetState() *RunState {
-	if m != nil {
-		return m.State
-	}
-	return nil
-}
-
-func (m *ShellTask) GetSystemTime() *google_protobuf.Duration {
-	if m != nil {
-		return m.SystemTime
-	}
-	return nil
-}
-
-func (m *ShellTask) GetUserTime() *google_protobuf.Duration {
-	if m != nil {
-		return m.UserTime
-	}
-	return nil
-}
-
 type RepositoryState struct {
 	Repository string `protobuf:"bytes,2,opt,name=repository" json:"repository,omitempty"`
 	Revision   string `protobuf:"bytes,3,opt,name=revision" json:"revision,omitempty"`
@@ -199,7 +182,7 @@ type RepositoryState struct {
 func (m *RepositoryState) Reset()                    { *m = RepositoryState{} }
 func (m *RepositoryState) String() string            { return proto.CompactTextString(m) }
 func (*RepositoryState) ProtoMessage()               {}
-func (*RepositoryState) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+func (*RepositoryState) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 func (m *RepositoryState) GetRepository() string {
 	if m != nil {
@@ -224,7 +207,7 @@ type RunState struct {
 func (m *RunState) Reset()                    { *m = RunState{} }
 func (m *RunState) String() string            { return proto.CompactTextString(m) }
 func (*RunState) ProtoMessage()               {}
-func (*RunState) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+func (*RunState) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
 func (m *RunState) GetStartTime() *google_protobuf1.Timestamp {
 	if m != nil {
@@ -248,49 +231,41 @@ func (m *RunState) GetEndTime() *google_protobuf1.Timestamp {
 }
 
 type BuilderJob struct {
-	Id              int32            `protobuf:"varint,1,opt,name=id" json:"id,omitempty"`
-	Request         string           `protobuf:"bytes,2,opt,name=request" json:"request,omitempty"`
-	RepositoryState *RepositoryState `protobuf:"bytes,3,opt,name=repository_state,json=repositoryState" json:"repository_state,omitempty"`
-	RunState        *RunState        `protobuf:"bytes,4,opt,name=run_state,json=runState" json:"run_state,omitempty"`
-	ShellTasks      []*ShellTask     `protobuf:"bytes,5,rep,name=shell_tasks,json=shellTasks" json:"shell_tasks,omitempty"`
+	Command    *ShellCommand             `protobuf:"bytes,1,opt,name=command" json:"command,omitempty"`
+	State      *RunState                 `protobuf:"bytes,2,opt,name=state" json:"state,omitempty"`
+	SystemTime *google_protobuf.Duration `protobuf:"bytes,3,opt,name=system_time,json=systemTime" json:"system_time,omitempty"`
+	UserTime   *google_protobuf.Duration `protobuf:"bytes,4,opt,name=user_time,json=userTime" json:"user_time,omitempty"`
 }
 
 func (m *BuilderJob) Reset()                    { *m = BuilderJob{} }
 func (m *BuilderJob) String() string            { return proto.CompactTextString(m) }
 func (*BuilderJob) ProtoMessage()               {}
-func (*BuilderJob) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+func (*BuilderJob) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
-func (m *BuilderJob) GetId() int32 {
+func (m *BuilderJob) GetCommand() *ShellCommand {
 	if m != nil {
-		return m.Id
-	}
-	return 0
-}
-
-func (m *BuilderJob) GetRequest() string {
-	if m != nil {
-		return m.Request
-	}
-	return ""
-}
-
-func (m *BuilderJob) GetRepositoryState() *RepositoryState {
-	if m != nil {
-		return m.RepositoryState
+		return m.Command
 	}
 	return nil
 }
 
-func (m *BuilderJob) GetRunState() *RunState {
+func (m *BuilderJob) GetState() *RunState {
 	if m != nil {
-		return m.RunState
+		return m.State
 	}
 	return nil
 }
 
-func (m *BuilderJob) GetShellTasks() []*ShellTask {
+func (m *BuilderJob) GetSystemTime() *google_protobuf.Duration {
 	if m != nil {
-		return m.ShellTasks
+		return m.SystemTime
+	}
+	return nil
+}
+
+func (m *BuilderJob) GetUserTime() *google_protobuf.Duration {
+	if m != nil {
+		return m.UserTime
 	}
 	return nil
 }
@@ -302,7 +277,7 @@ type BuilderJobs struct {
 func (m *BuilderJobs) Reset()                    { *m = BuilderJobs{} }
 func (m *BuilderJobs) String() string            { return proto.CompactTextString(m) }
 func (*BuilderJobs) ProtoMessage()               {}
-func (*BuilderJobs) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
+func (*BuilderJobs) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
 func (m *BuilderJobs) GetJobs() []*BuilderJob {
 	if m != nil {
@@ -319,7 +294,7 @@ type GitRepositoryInfo struct {
 func (m *GitRepositoryInfo) Reset()                    { *m = GitRepositoryInfo{} }
 func (m *GitRepositoryInfo) String() string            { return proto.CompactTextString(m) }
 func (*GitRepositoryInfo) ProtoMessage()               {}
-func (*GitRepositoryInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
+func (*GitRepositoryInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
 func (m *GitRepositoryInfo) GetBranches() []*GitRepositoryInfo_Branch {
 	if m != nil {
@@ -346,7 +321,7 @@ type GitRepositoryInfo_Branch struct {
 func (m *GitRepositoryInfo_Branch) Reset()                    { *m = GitRepositoryInfo_Branch{} }
 func (m *GitRepositoryInfo_Branch) String() string            { return proto.CompactTextString(m) }
 func (*GitRepositoryInfo_Branch) ProtoMessage()               {}
-func (*GitRepositoryInfo_Branch) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6, 0} }
+func (*GitRepositoryInfo_Branch) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5, 0} }
 
 func (m *GitRepositoryInfo_Branch) GetName() string {
 	if m != nil {
@@ -392,7 +367,7 @@ type GitRepositoryInfo_Upstream struct {
 func (m *GitRepositoryInfo_Upstream) Reset()                    { *m = GitRepositoryInfo_Upstream{} }
 func (m *GitRepositoryInfo_Upstream) String() string            { return proto.CompactTextString(m) }
 func (*GitRepositoryInfo_Upstream) ProtoMessage()               {}
-func (*GitRepositoryInfo_Upstream) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6, 1} }
+func (*GitRepositoryInfo_Upstream) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5, 1} }
 
 func (m *GitRepositoryInfo_Upstream) GetName() string {
 	if m != nil {
@@ -424,7 +399,7 @@ type LogEvent struct {
 func (m *LogEvent) Reset()                    { *m = LogEvent{} }
 func (m *LogEvent) String() string            { return proto.CompactTextString(m) }
 func (*LogEvent) ProtoMessage()               {}
-func (*LogEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
+func (*LogEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
 func (m *LogEvent) GetHost() string {
 	if m != nil {
@@ -454,7 +429,7 @@ type BeginCommandEvent struct {
 func (m *BeginCommandEvent) Reset()                    { *m = BeginCommandEvent{} }
 func (m *BeginCommandEvent) String() string            { return proto.CompactTextString(m) }
 func (*BeginCommandEvent) ProtoMessage()               {}
-func (*BeginCommandEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
+func (*BeginCommandEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 func (m *BeginCommandEvent) GetCommand() *ShellCommand {
 	if m != nil {
@@ -471,7 +446,7 @@ type CommandOutputEvent struct {
 func (m *CommandOutputEvent) Reset()                    { *m = CommandOutputEvent{} }
 func (m *CommandOutputEvent) String() string            { return proto.CompactTextString(m) }
 func (*CommandOutputEvent) ProtoMessage()               {}
-func (*CommandOutputEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
+func (*CommandOutputEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
 func (m *CommandOutputEvent) GetStream() CommandOutputEvent_Stream {
 	if m != nil {
@@ -496,7 +471,7 @@ type EndCommandEvent struct {
 func (m *EndCommandEvent) Reset()                    { *m = EndCommandEvent{} }
 func (m *EndCommandEvent) String() string            { return proto.CompactTextString(m) }
 func (*EndCommandEvent) ProtoMessage()               {}
-func (*EndCommandEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
+func (*EndCommandEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
 func (m *EndCommandEvent) GetReturnCode() int32 {
 	if m != nil {
@@ -529,7 +504,7 @@ type GitBranchTaskEvent struct {
 func (m *GitBranchTaskEvent) Reset()                    { *m = GitBranchTaskEvent{} }
 func (m *GitBranchTaskEvent) String() string            { return proto.CompactTextString(m) }
 func (*GitBranchTaskEvent) ProtoMessage()               {}
-func (*GitBranchTaskEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
+func (*GitBranchTaskEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
 
 func (m *GitBranchTaskEvent) GetBranch() string {
 	if m != nil {
@@ -571,7 +546,7 @@ type JobEvent struct {
 func (m *JobEvent) Reset()                    { *m = JobEvent{} }
 func (m *JobEvent) String() string            { return proto.CompactTextString(m) }
 func (*JobEvent) ProtoMessage()               {}
-func (*JobEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{12} }
+func (*JobEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
 
 func (m *JobEvent) GetTime() *google_protobuf1.Timestamp {
 	if m != nil {
@@ -616,14 +591,22 @@ func (m *JobEvent) GetBranchTaskEvent() *GitBranchTaskEvent {
 }
 
 type BuildOptions struct {
-	Targets         []string         `protobuf:"bytes,1,rep,name=targets" json:"targets,omitempty"`
-	RepositoryState *RepositoryState `protobuf:"bytes,2,opt,name=repository_state,json=repositoryState" json:"repository_state,omitempty"`
+	Platform        string           `protobuf:"bytes,1,opt,name=platform" json:"platform,omitempty"`
+	Targets         []string         `protobuf:"bytes,2,rep,name=targets" json:"targets,omitempty"`
+	RepositoryState *RepositoryState `protobuf:"bytes,3,opt,name=repository_state,json=repositoryState" json:"repository_state,omitempty"`
 }
 
 func (m *BuildOptions) Reset()                    { *m = BuildOptions{} }
 func (m *BuildOptions) String() string            { return proto.CompactTextString(m) }
 func (*BuildOptions) ProtoMessage()               {}
-func (*BuildOptions) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{13} }
+func (*BuildOptions) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{12} }
+
+func (m *BuildOptions) GetPlatform() string {
+	if m != nil {
+		return m.Platform
+	}
+	return ""
+}
 
 func (m *BuildOptions) GetTargets() []string {
 	if m != nil {
@@ -646,7 +629,7 @@ type TargetList struct {
 func (m *TargetList) Reset()                    { *m = TargetList{} }
 func (m *TargetList) String() string            { return proto.CompactTextString(m) }
 func (*TargetList) ProtoMessage()               {}
-func (*TargetList) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{14} }
+func (*TargetList) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{13} }
 
 func (m *TargetList) GetTarget() []string {
 	if m != nil {
@@ -662,7 +645,7 @@ type BranchList struct {
 func (m *BranchList) Reset()                    { *m = BranchList{} }
 func (m *BranchList) String() string            { return proto.CompactTextString(m) }
 func (*BranchList) ProtoMessage()               {}
-func (*BranchList) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{15} }
+func (*BranchList) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{14} }
 
 func (m *BranchList) GetBranch() []string {
 	if m != nil {
@@ -672,19 +655,27 @@ func (m *BranchList) GetBranch() []string {
 }
 
 type RunOptions struct {
-	Command         *ShellCommand    `protobuf:"bytes,1,opt,name=command" json:"command,omitempty"`
-	Dependencies    *TargetList      `protobuf:"bytes,2,opt,name=dependencies" json:"dependencies,omitempty"`
-	RepositoryState *RepositoryState `protobuf:"bytes,3,opt,name=repository_state,json=repositoryState" json:"repository_state,omitempty"`
+	Platform        string           `protobuf:"bytes,1,opt,name=platform" json:"platform,omitempty"`
+	RepositoryState *RepositoryState `protobuf:"bytes,2,opt,name=repository_state,json=repositoryState" json:"repository_state,omitempty"`
+	Dependencies    *TargetList      `protobuf:"bytes,3,opt,name=dependencies" json:"dependencies,omitempty"`
+	Command         *ShellCommand    `protobuf:"bytes,4,opt,name=command" json:"command,omitempty"`
 }
 
 func (m *RunOptions) Reset()                    { *m = RunOptions{} }
 func (m *RunOptions) String() string            { return proto.CompactTextString(m) }
 func (*RunOptions) ProtoMessage()               {}
-func (*RunOptions) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{16} }
+func (*RunOptions) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{15} }
 
-func (m *RunOptions) GetCommand() *ShellCommand {
+func (m *RunOptions) GetPlatform() string {
 	if m != nil {
-		return m.Command
+		return m.Platform
+	}
+	return ""
+}
+
+func (m *RunOptions) GetRepositoryState() *RepositoryState {
+	if m != nil {
+		return m.RepositoryState
 	}
 	return nil
 }
@@ -696,16 +687,87 @@ func (m *RunOptions) GetDependencies() *TargetList {
 	return nil
 }
 
-func (m *RunOptions) GetRepositoryState() *RepositoryState {
+func (m *RunOptions) GetCommand() *ShellCommand {
+	if m != nil {
+		return m.Command
+	}
+	return nil
+}
+
+type ClobberOptions struct {
+	Platform        string                `protobuf:"bytes,1,opt,name=platform" json:"platform,omitempty"`
+	RepositoryState *RepositoryState      `protobuf:"bytes,2,opt,name=repository_state,json=repositoryState" json:"repository_state,omitempty"`
+	Target          ClobberOptions_Target `protobuf:"varint,3,opt,name=target,enum=stonesthrow.ClobberOptions_Target" json:"target,omitempty"`
+	Force           bool                  `protobuf:"varint,4,opt,name=force" json:"force,omitempty"`
+}
+
+func (m *ClobberOptions) Reset()                    { *m = ClobberOptions{} }
+func (m *ClobberOptions) String() string            { return proto.CompactTextString(m) }
+func (*ClobberOptions) ProtoMessage()               {}
+func (*ClobberOptions) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{16} }
+
+func (m *ClobberOptions) GetPlatform() string {
+	if m != nil {
+		return m.Platform
+	}
+	return ""
+}
+
+func (m *ClobberOptions) GetRepositoryState() *RepositoryState {
 	if m != nil {
 		return m.RepositoryState
 	}
 	return nil
 }
 
+func (m *ClobberOptions) GetTarget() ClobberOptions_Target {
+	if m != nil {
+		return m.Target
+	}
+	return ClobberOptions_SOURCE
+}
+
+func (m *ClobberOptions) GetForce() bool {
+	if m != nil {
+		return m.Force
+	}
+	return false
+}
+
+type PingOptions struct {
+	Ping string `protobuf:"bytes,1,opt,name=ping" json:"ping,omitempty"`
+}
+
+func (m *PingOptions) Reset()                    { *m = PingOptions{} }
+func (m *PingOptions) String() string            { return proto.CompactTextString(m) }
+func (*PingOptions) ProtoMessage()               {}
+func (*PingOptions) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{17} }
+
+func (m *PingOptions) GetPing() string {
+	if m != nil {
+		return m.Ping
+	}
+	return ""
+}
+
+type PingResult struct {
+	Pong string `protobuf:"bytes,1,opt,name=pong" json:"pong,omitempty"`
+}
+
+func (m *PingResult) Reset()                    { *m = PingResult{} }
+func (m *PingResult) String() string            { return proto.CompactTextString(m) }
+func (*PingResult) ProtoMessage()               {}
+func (*PingResult) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{18} }
+
+func (m *PingResult) GetPong() string {
+	if m != nil {
+		return m.Pong
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterType((*ShellCommand)(nil), "stonesthrow.ShellCommand")
-	proto.RegisterType((*ShellTask)(nil), "stonesthrow.ShellTask")
 	proto.RegisterType((*RepositoryState)(nil), "stonesthrow.RepositoryState")
 	proto.RegisterType((*RunState)(nil), "stonesthrow.RunState")
 	proto.RegisterType((*BuilderJob)(nil), "stonesthrow.BuilderJob")
@@ -723,9 +785,13 @@ func init() {
 	proto.RegisterType((*TargetList)(nil), "stonesthrow.TargetList")
 	proto.RegisterType((*BranchList)(nil), "stonesthrow.BranchList")
 	proto.RegisterType((*RunOptions)(nil), "stonesthrow.RunOptions")
+	proto.RegisterType((*ClobberOptions)(nil), "stonesthrow.ClobberOptions")
+	proto.RegisterType((*PingOptions)(nil), "stonesthrow.PingOptions")
+	proto.RegisterType((*PingResult)(nil), "stonesthrow.PingResult")
 	proto.RegisterEnum("stonesthrow.LogEvent_Severity", LogEvent_Severity_name, LogEvent_Severity_value)
 	proto.RegisterEnum("stonesthrow.CommandOutputEvent_Stream", CommandOutputEvent_Stream_name, CommandOutputEvent_Stream_value)
 	proto.RegisterEnum("stonesthrow.GitBranchTaskEvent_Result", GitBranchTaskEvent_Result_name, GitBranchTaskEvent_Result_value)
+	proto.RegisterEnum("stonesthrow.ClobberOptions_Target", ClobberOptions_Target_name, ClobberOptions_Target_value)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -739,13 +805,12 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for PlatformBuildHost service
 
 type PlatformBuildHostClient interface {
-	ListJobs(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (*BuilderJobs, error)
-	KillJobs(ctx context.Context, in *BuilderJobs, opts ...grpc.CallOption) (PlatformBuildHost_KillJobsClient, error)
 	Build(ctx context.Context, in *BuildOptions, opts ...grpc.CallOption) (PlatformBuildHost_BuildClient, error)
 	Run(ctx context.Context, in *RunOptions, opts ...grpc.CallOption) (PlatformBuildHost_RunClient, error)
-	Clobber(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (PlatformBuildHost_ClobberClient, error)
-	Prepare(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (PlatformBuildHost_PrepareClient, error)
-	ListTargets(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (*TargetList, error)
+	Clobber(ctx context.Context, in *ClobberOptions, opts ...grpc.CallOption) (PlatformBuildHost_ClobberClient, error)
+	Clean(ctx context.Context, in *BuildOptions, opts ...grpc.CallOption) (PlatformBuildHost_CleanClient, error)
+	Prepare(ctx context.Context, in *BuildOptions, opts ...grpc.CallOption) (PlatformBuildHost_PrepareClient, error)
+	ListTargets(ctx context.Context, in *BuildOptions, opts ...grpc.CallOption) (*TargetList, error)
 }
 
 type platformBuildHostClient struct {
@@ -756,49 +821,8 @@ func NewPlatformBuildHostClient(cc *grpc.ClientConn) PlatformBuildHostClient {
 	return &platformBuildHostClient{cc}
 }
 
-func (c *platformBuildHostClient) ListJobs(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (*BuilderJobs, error) {
-	out := new(BuilderJobs)
-	err := grpc.Invoke(ctx, "/stonesthrow.PlatformBuildHost/ListJobs", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *platformBuildHostClient) KillJobs(ctx context.Context, in *BuilderJobs, opts ...grpc.CallOption) (PlatformBuildHost_KillJobsClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_PlatformBuildHost_serviceDesc.Streams[0], c.cc, "/stonesthrow.PlatformBuildHost/KillJobs", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &platformBuildHostKillJobsClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type PlatformBuildHost_KillJobsClient interface {
-	Recv() (*JobEvent, error)
-	grpc.ClientStream
-}
-
-type platformBuildHostKillJobsClient struct {
-	grpc.ClientStream
-}
-
-func (x *platformBuildHostKillJobsClient) Recv() (*JobEvent, error) {
-	m := new(JobEvent)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 func (c *platformBuildHostClient) Build(ctx context.Context, in *BuildOptions, opts ...grpc.CallOption) (PlatformBuildHost_BuildClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_PlatformBuildHost_serviceDesc.Streams[1], c.cc, "/stonesthrow.PlatformBuildHost/Build", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_PlatformBuildHost_serviceDesc.Streams[0], c.cc, "/stonesthrow.PlatformBuildHost/Build", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -830,7 +854,7 @@ func (x *platformBuildHostBuildClient) Recv() (*JobEvent, error) {
 }
 
 func (c *platformBuildHostClient) Run(ctx context.Context, in *RunOptions, opts ...grpc.CallOption) (PlatformBuildHost_RunClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_PlatformBuildHost_serviceDesc.Streams[2], c.cc, "/stonesthrow.PlatformBuildHost/Run", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_PlatformBuildHost_serviceDesc.Streams[1], c.cc, "/stonesthrow.PlatformBuildHost/Run", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -861,8 +885,8 @@ func (x *platformBuildHostRunClient) Recv() (*JobEvent, error) {
 	return m, nil
 }
 
-func (c *platformBuildHostClient) Clobber(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (PlatformBuildHost_ClobberClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_PlatformBuildHost_serviceDesc.Streams[3], c.cc, "/stonesthrow.PlatformBuildHost/Clobber", opts...)
+func (c *platformBuildHostClient) Clobber(ctx context.Context, in *ClobberOptions, opts ...grpc.CallOption) (PlatformBuildHost_ClobberClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_PlatformBuildHost_serviceDesc.Streams[2], c.cc, "/stonesthrow.PlatformBuildHost/Clobber", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -893,7 +917,39 @@ func (x *platformBuildHostClobberClient) Recv() (*JobEvent, error) {
 	return m, nil
 }
 
-func (c *platformBuildHostClient) Prepare(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (PlatformBuildHost_PrepareClient, error) {
+func (c *platformBuildHostClient) Clean(ctx context.Context, in *BuildOptions, opts ...grpc.CallOption) (PlatformBuildHost_CleanClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_PlatformBuildHost_serviceDesc.Streams[3], c.cc, "/stonesthrow.PlatformBuildHost/Clean", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &platformBuildHostCleanClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type PlatformBuildHost_CleanClient interface {
+	Recv() (*JobEvent, error)
+	grpc.ClientStream
+}
+
+type platformBuildHostCleanClient struct {
+	grpc.ClientStream
+}
+
+func (x *platformBuildHostCleanClient) Recv() (*JobEvent, error) {
+	m := new(JobEvent)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *platformBuildHostClient) Prepare(ctx context.Context, in *BuildOptions, opts ...grpc.CallOption) (PlatformBuildHost_PrepareClient, error) {
 	stream, err := grpc.NewClientStream(ctx, &_PlatformBuildHost_serviceDesc.Streams[4], c.cc, "/stonesthrow.PlatformBuildHost/Prepare", opts...)
 	if err != nil {
 		return nil, err
@@ -925,7 +981,7 @@ func (x *platformBuildHostPrepareClient) Recv() (*JobEvent, error) {
 	return m, nil
 }
 
-func (c *platformBuildHostClient) ListTargets(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (*TargetList, error) {
+func (c *platformBuildHostClient) ListTargets(ctx context.Context, in *BuildOptions, opts ...grpc.CallOption) (*TargetList, error) {
 	out := new(TargetList)
 	err := grpc.Invoke(ctx, "/stonesthrow.PlatformBuildHost/ListTargets", in, out, c.cc, opts...)
 	if err != nil {
@@ -937,56 +993,16 @@ func (c *platformBuildHostClient) ListTargets(ctx context.Context, in *Repositor
 // Server API for PlatformBuildHost service
 
 type PlatformBuildHostServer interface {
-	ListJobs(context.Context, *RepositoryState) (*BuilderJobs, error)
-	KillJobs(*BuilderJobs, PlatformBuildHost_KillJobsServer) error
 	Build(*BuildOptions, PlatformBuildHost_BuildServer) error
 	Run(*RunOptions, PlatformBuildHost_RunServer) error
-	Clobber(*RepositoryState, PlatformBuildHost_ClobberServer) error
-	Prepare(*RepositoryState, PlatformBuildHost_PrepareServer) error
-	ListTargets(context.Context, *RepositoryState) (*TargetList, error)
+	Clobber(*ClobberOptions, PlatformBuildHost_ClobberServer) error
+	Clean(*BuildOptions, PlatformBuildHost_CleanServer) error
+	Prepare(*BuildOptions, PlatformBuildHost_PrepareServer) error
+	ListTargets(context.Context, *BuildOptions) (*TargetList, error)
 }
 
 func RegisterPlatformBuildHostServer(s *grpc.Server, srv PlatformBuildHostServer) {
 	s.RegisterService(&_PlatformBuildHost_serviceDesc, srv)
-}
-
-func _PlatformBuildHost_ListJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RepositoryState)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PlatformBuildHostServer).ListJobs(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/stonesthrow.PlatformBuildHost/ListJobs",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PlatformBuildHostServer).ListJobs(ctx, req.(*RepositoryState))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _PlatformBuildHost_KillJobs_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(BuilderJobs)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(PlatformBuildHostServer).KillJobs(m, &platformBuildHostKillJobsServer{stream})
-}
-
-type PlatformBuildHost_KillJobsServer interface {
-	Send(*JobEvent) error
-	grpc.ServerStream
-}
-
-type platformBuildHostKillJobsServer struct {
-	grpc.ServerStream
-}
-
-func (x *platformBuildHostKillJobsServer) Send(m *JobEvent) error {
-	return x.ServerStream.SendMsg(m)
 }
 
 func _PlatformBuildHost_Build_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -1032,7 +1048,7 @@ func (x *platformBuildHostRunServer) Send(m *JobEvent) error {
 }
 
 func _PlatformBuildHost_Clobber_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(RepositoryState)
+	m := new(ClobberOptions)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -1052,8 +1068,29 @@ func (x *platformBuildHostClobberServer) Send(m *JobEvent) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _PlatformBuildHost_Clean_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(BuildOptions)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PlatformBuildHostServer).Clean(m, &platformBuildHostCleanServer{stream})
+}
+
+type PlatformBuildHost_CleanServer interface {
+	Send(*JobEvent) error
+	grpc.ServerStream
+}
+
+type platformBuildHostCleanServer struct {
+	grpc.ServerStream
+}
+
+func (x *platformBuildHostCleanServer) Send(m *JobEvent) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 func _PlatformBuildHost_Prepare_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(RepositoryState)
+	m := new(BuildOptions)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -1074,7 +1111,7 @@ func (x *platformBuildHostPrepareServer) Send(m *JobEvent) error {
 }
 
 func _PlatformBuildHost_ListTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RepositoryState)
+	in := new(BuildOptions)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1086,7 +1123,7 @@ func _PlatformBuildHost_ListTargets_Handler(srv interface{}, ctx context.Context
 		FullMethod: "/stonesthrow.PlatformBuildHost/ListTargets",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PlatformBuildHostServer).ListTargets(ctx, req.(*RepositoryState))
+		return srv.(PlatformBuildHostServer).ListTargets(ctx, req.(*BuildOptions))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1096,20 +1133,11 @@ var _PlatformBuildHost_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformBuildHostServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "ListJobs",
-			Handler:    _PlatformBuildHost_ListJobs_Handler,
-		},
-		{
 			MethodName: "ListTargets",
 			Handler:    _PlatformBuildHost_ListTargets_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "KillJobs",
-			Handler:       _PlatformBuildHost_KillJobs_Handler,
-			ServerStreams: true,
-		},
 		{
 			StreamName:    "Build",
 			Handler:       _PlatformBuildHost_Build_Handler,
@@ -1123,6 +1151,11 @@ var _PlatformBuildHost_serviceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Clobber",
 			Handler:       _PlatformBuildHost_Clobber_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Clean",
+			Handler:       _PlatformBuildHost_Clean_Handler,
 			ServerStreams: true,
 		},
 		{
@@ -1145,6 +1178,7 @@ type RepositoryHostClient interface {
 	SyncLocal(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (RepositoryHost_SyncLocalClient, error)
 	SyncRemote(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (RepositoryHost_SyncRemoteClient, error)
 	PrepareForReceive(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (RepositoryHost_PrepareForReceiveClient, error)
+	RebaseUpdate(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (RepositoryHost_RebaseUpdateClient, error)
 }
 
 type repositoryHostClient struct {
@@ -1388,6 +1422,38 @@ func (x *repositoryHostPrepareForReceiveClient) Recv() (*JobEvent, error) {
 	return m, nil
 }
 
+func (c *repositoryHostClient) RebaseUpdate(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (RepositoryHost_RebaseUpdateClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_RepositoryHost_serviceDesc.Streams[7], c.cc, "/stonesthrow.RepositoryHost/RebaseUpdate", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &repositoryHostRebaseUpdateClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type RepositoryHost_RebaseUpdateClient interface {
+	Recv() (*JobEvent, error)
+	grpc.ClientStream
+}
+
+type repositoryHostRebaseUpdateClient struct {
+	grpc.ClientStream
+}
+
+func (x *repositoryHostRebaseUpdateClient) Recv() (*JobEvent, error) {
+	m := new(JobEvent)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // Server API for RepositoryHost service
 
 type RepositoryHostServer interface {
@@ -1399,6 +1465,7 @@ type RepositoryHostServer interface {
 	SyncLocal(*RepositoryState, RepositoryHost_SyncLocalServer) error
 	SyncRemote(*RepositoryState, RepositoryHost_SyncRemoteServer) error
 	PrepareForReceive(*RepositoryState, RepositoryHost_PrepareForReceiveServer) error
+	RebaseUpdate(*RepositoryState, RepositoryHost_RebaseUpdateServer) error
 }
 
 func RegisterRepositoryHostServer(s *grpc.Server, srv RepositoryHostServer) {
@@ -1570,6 +1637,27 @@ func (x *repositoryHostPrepareForReceiveServer) Send(m *JobEvent) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _RepositoryHost_RebaseUpdate_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RepositoryState)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(RepositoryHostServer).RebaseUpdate(m, &repositoryHostRebaseUpdateServer{stream})
+}
+
+type RepositoryHost_RebaseUpdateServer interface {
+	Send(*JobEvent) error
+	grpc.ServerStream
+}
+
+type repositoryHostRebaseUpdateServer struct {
+	grpc.ServerStream
+}
+
+func (x *repositoryHostRebaseUpdateServer) Send(m *JobEvent) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 var _RepositoryHost_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "stonesthrow.RepositoryHost",
 	HandlerType: (*RepositoryHostServer)(nil),
@@ -1615,6 +1703,11 @@ var _RepositoryHost_serviceDesc = grpc.ServiceDesc{
 			Handler:       _RepositoryHost_PrepareForReceive_Handler,
 			ServerStreams: true,
 		},
+		{
+			StreamName:    "RebaseUpdate",
+			Handler:       _RepositoryHost_RebaseUpdate_Handler,
+			ServerStreams: true,
+		},
 	},
 	Metadata: "st.proto",
 }
@@ -1622,6 +1715,9 @@ var _RepositoryHost_serviceDesc = grpc.ServiceDesc{
 // Client API for ServiceHost service
 
 type ServiceHostClient interface {
+	Ping(ctx context.Context, in *PingOptions, opts ...grpc.CallOption) (*PingResult, error)
+	ListJobs(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (*BuilderJobs, error)
+	KillJobs(ctx context.Context, in *BuilderJobs, opts ...grpc.CallOption) (ServiceHost_KillJobsClient, error)
 	Shutdown(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (ServiceHost_ShutdownClient, error)
 	SelfUpdate(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (ServiceHost_SelfUpdateClient, error)
 }
@@ -1634,8 +1730,58 @@ func NewServiceHostClient(cc *grpc.ClientConn) ServiceHostClient {
 	return &serviceHostClient{cc}
 }
 
+func (c *serviceHostClient) Ping(ctx context.Context, in *PingOptions, opts ...grpc.CallOption) (*PingResult, error) {
+	out := new(PingResult)
+	err := grpc.Invoke(ctx, "/stonesthrow.ServiceHost/Ping", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceHostClient) ListJobs(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (*BuilderJobs, error) {
+	out := new(BuilderJobs)
+	err := grpc.Invoke(ctx, "/stonesthrow.ServiceHost/ListJobs", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceHostClient) KillJobs(ctx context.Context, in *BuilderJobs, opts ...grpc.CallOption) (ServiceHost_KillJobsClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_ServiceHost_serviceDesc.Streams[0], c.cc, "/stonesthrow.ServiceHost/KillJobs", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &serviceHostKillJobsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type ServiceHost_KillJobsClient interface {
+	Recv() (*JobEvent, error)
+	grpc.ClientStream
+}
+
+type serviceHostKillJobsClient struct {
+	grpc.ClientStream
+}
+
+func (x *serviceHostKillJobsClient) Recv() (*JobEvent, error) {
+	m := new(JobEvent)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *serviceHostClient) Shutdown(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (ServiceHost_ShutdownClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_ServiceHost_serviceDesc.Streams[0], c.cc, "/stonesthrow.ServiceHost/Shutdown", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_ServiceHost_serviceDesc.Streams[1], c.cc, "/stonesthrow.ServiceHost/Shutdown", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1667,7 +1813,7 @@ func (x *serviceHostShutdownClient) Recv() (*JobEvent, error) {
 }
 
 func (c *serviceHostClient) SelfUpdate(ctx context.Context, in *RepositoryState, opts ...grpc.CallOption) (ServiceHost_SelfUpdateClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_ServiceHost_serviceDesc.Streams[1], c.cc, "/stonesthrow.ServiceHost/SelfUpdate", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_ServiceHost_serviceDesc.Streams[2], c.cc, "/stonesthrow.ServiceHost/SelfUpdate", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1701,12 +1847,72 @@ func (x *serviceHostSelfUpdateClient) Recv() (*JobEvent, error) {
 // Server API for ServiceHost service
 
 type ServiceHostServer interface {
+	Ping(context.Context, *PingOptions) (*PingResult, error)
+	ListJobs(context.Context, *RepositoryState) (*BuilderJobs, error)
+	KillJobs(*BuilderJobs, ServiceHost_KillJobsServer) error
 	Shutdown(*RepositoryState, ServiceHost_ShutdownServer) error
 	SelfUpdate(*RepositoryState, ServiceHost_SelfUpdateServer) error
 }
 
 func RegisterServiceHostServer(s *grpc.Server, srv ServiceHostServer) {
 	s.RegisterService(&_ServiceHost_serviceDesc, srv)
+}
+
+func _ServiceHost_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingOptions)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceHostServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/stonesthrow.ServiceHost/Ping",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceHostServer).Ping(ctx, req.(*PingOptions))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ServiceHost_ListJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RepositoryState)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceHostServer).ListJobs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/stonesthrow.ServiceHost/ListJobs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceHostServer).ListJobs(ctx, req.(*RepositoryState))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ServiceHost_KillJobs_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(BuilderJobs)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ServiceHostServer).KillJobs(m, &serviceHostKillJobsServer{stream})
+}
+
+type ServiceHost_KillJobsServer interface {
+	Send(*JobEvent) error
+	grpc.ServerStream
+}
+
+type serviceHostKillJobsServer struct {
+	grpc.ServerStream
+}
+
+func (x *serviceHostKillJobsServer) Send(m *JobEvent) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _ServiceHost_Shutdown_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -1754,8 +1960,22 @@ func (x *serviceHostSelfUpdateServer) Send(m *JobEvent) error {
 var _ServiceHost_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "stonesthrow.ServiceHost",
 	HandlerType: (*ServiceHostServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Ping",
+			Handler:    _ServiceHost_Ping_Handler,
+		},
+		{
+			MethodName: "ListJobs",
+			Handler:    _ServiceHost_ListJobs_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "KillJobs",
+			Handler:       _ServiceHost_KillJobs_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "Shutdown",
 			Handler:       _ServiceHost_Shutdown_Handler,
@@ -1773,93 +1993,99 @@ var _ServiceHost_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("st.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 1407 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x56, 0x5b, 0x6f, 0x1b, 0x45,
-	0x14, 0xee, 0xfa, 0x96, 0xdd, 0xe3, 0x12, 0x3b, 0x43, 0x69, 0x5d, 0x53, 0xa5, 0xd5, 0x72, 0x69,
-	0xa0, 0x92, 0x0b, 0xae, 0xa0, 0x34, 0x15, 0x97, 0x38, 0x71, 0xd2, 0xa4, 0xa1, 0x09, 0xe3, 0x84,
-	0x07, 0x5e, 0xac, 0xb5, 0x77, 0x62, 0x2f, 0x5d, 0xef, 0xb8, 0x33, 0xb3, 0xa9, 0xf2, 0x0f, 0x10,
-	0x8f, 0x48, 0x20, 0x7e, 0x01, 0xe2, 0x8f, 0x20, 0x9e, 0x78, 0xe5, 0x9d, 0x77, 0x7e, 0x04, 0x9a,
-	0xcb, 0xda, 0x59, 0x3b, 0xb1, 0x2b, 0x97, 0xb7, 0x99, 0x33, 0xe7, 0x7c, 0x73, 0x2e, 0xdf, 0x99,
-	0x33, 0x60, 0x73, 0x51, 0x1b, 0x32, 0x2a, 0x28, 0x2a, 0x72, 0x41, 0x23, 0xc2, 0x45, 0x9f, 0xd1,
-	0x97, 0xd5, 0xd5, 0x1e, 0xa5, 0xbd, 0x90, 0xdc, 0x57, 0x47, 0x9d, 0xf8, 0xe4, 0xbe, 0x1f, 0x33,
-	0x4f, 0x04, 0x34, 0xd2, 0xca, 0xd5, 0xdb, 0x93, 0xe7, 0x22, 0x18, 0x10, 0x2e, 0xbc, 0xc1, 0x50,
-	0x2b, 0xb8, 0xdf, 0xc1, 0xd5, 0x56, 0x9f, 0x84, 0xe1, 0x26, 0x1d, 0x0c, 0xbc, 0xc8, 0x47, 0x15,
-	0x58, 0xea, 0xea, 0x65, 0xc5, 0xba, 0x93, 0x5d, 0x73, 0x70, 0xb2, 0x45, 0xb7, 0xc0, 0xf1, 0x03,
-	0x46, 0xba, 0x82, 0xb2, 0xb3, 0x4a, 0xe6, 0x8e, 0xb5, 0xe6, 0xe0, 0xb1, 0x00, 0x21, 0xc8, 0xf5,
-	0x29, 0x17, 0x95, 0xac, 0x3a, 0x50, 0x6b, 0xf7, 0x1f, 0x0b, 0x1c, 0x05, 0x7e, 0xe4, 0xf1, 0xe7,
-	0xe8, 0xc1, 0x79, 0x64, 0x6b, 0xad, 0x58, 0xbf, 0x59, 0x3b, 0x17, 0x49, 0xed, 0xbc, 0x17, 0xe3,
-	0x4b, 0xef, 0x41, 0x9e, 0x0b, 0x4f, 0x10, 0x75, 0x61, 0xb1, 0xfe, 0x56, 0xca, 0x04, 0xc7, 0x51,
-	0x4b, 0x1e, 0x62, 0xad, 0x83, 0xd6, 0xa1, 0xc8, 0xcf, 0xb8, 0x20, 0x83, 0xb6, 0x8c, 0x52, 0xb9,
-	0x22, 0x6f, 0xd1, 0x29, 0xa8, 0x25, 0x29, 0xa8, 0x6d, 0x99, 0x14, 0x61, 0xd0, 0xda, 0x47, 0xc1,
-	0x80, 0xa0, 0x4f, 0xc1, 0x89, 0x39, 0x61, 0xda, 0x32, 0x37, 0xcf, 0xd2, 0x96, 0xba, 0xd2, 0xce,
-	0xfd, 0x1a, 0x4a, 0x98, 0x0c, 0x29, 0x0f, 0x64, 0x16, 0x94, 0x37, 0x68, 0x15, 0x80, 0x8d, 0x44,
-	0x26, 0x53, 0xe7, 0x24, 0xa8, 0x0a, 0x36, 0x23, 0xa7, 0x01, 0x0f, 0x68, 0x64, 0xd2, 0x35, 0xda,
-	0xbb, 0xbf, 0x58, 0x60, 0x27, 0x61, 0xa1, 0x47, 0x00, 0x5c, 0x78, 0x4c, 0x68, 0xa7, 0x74, 0xd2,
-	0xaa, 0x53, 0x4e, 0x1d, 0x25, 0x15, 0xc5, 0x8e, 0xd2, 0x56, 0xe1, 0x54, 0x60, 0x89, 0xc5, 0x51,
-	0x14, 0x44, 0x3d, 0xe5, 0x80, 0x8d, 0x93, 0x2d, 0xfa, 0x04, 0x6c, 0x12, 0xf9, 0xe7, 0x33, 0x34,
-	0x0b, 0x72, 0x89, 0x44, 0xbe, 0x8a, 0xf3, 0x5f, 0x0b, 0xa0, 0x11, 0x07, 0xa1, 0x4f, 0xd8, 0x1e,
-	0xed, 0xa0, 0x65, 0xc8, 0x04, 0xba, 0x8e, 0x79, 0x9c, 0x09, 0x14, 0x6d, 0x18, 0x79, 0x11, 0x13,
-	0x2e, 0x4c, 0xc0, 0xc9, 0x16, 0xed, 0x40, 0x79, 0x1c, 0x7b, 0x5b, 0x17, 0x53, 0xdf, 0x7b, 0x2b,
-	0x5d, 0xcc, 0x74, 0x16, 0x71, 0x89, 0x4d, 0xa4, 0xb5, 0x0e, 0x0e, 0x8b, 0x23, 0x83, 0x90, 0x9b,
-	0x45, 0x07, 0x9b, 0x25, 0x19, 0x7c, 0x08, 0x45, 0x2e, 0x79, 0xd5, 0x16, 0x1e, 0x7f, 0xce, 0x2b,
-	0xf9, 0x3b, 0xd9, 0xb5, 0x62, 0xfd, 0xfa, 0x34, 0xef, 0x24, 0x41, 0x31, 0xf0, 0x64, 0xc9, 0xdd,
-	0x75, 0x28, 0x8e, 0xa3, 0xe5, 0xe8, 0x1e, 0xe4, 0xbe, 0xa7, 0x1d, 0xae, 0x5a, 0xa2, 0x58, 0xbf,
-	0x91, 0x02, 0x18, 0xeb, 0x61, 0xa5, 0xe4, 0xfe, 0x98, 0x83, 0x95, 0x9d, 0x40, 0x8c, 0x03, 0xda,
-	0x8d, 0x4e, 0x28, 0xda, 0x00, 0xbb, 0xc3, 0xbc, 0xa8, 0xdb, 0x27, 0x09, 0xcc, 0x7b, 0x29, 0x98,
-	0x29, 0x8b, 0x5a, 0x43, 0xa9, 0xe3, 0x91, 0x19, 0x6a, 0x82, 0x13, 0x0f, 0xb9, 0x60, 0xc4, 0x1b,
-	0xf0, 0x4a, 0x46, 0x61, 0xdc, 0x9d, 0x83, 0x71, 0x6c, 0xf4, 0xf1, 0xd8, 0xb2, 0xfa, 0x53, 0x06,
-	0x0a, 0x1a, 0x5b, 0x76, 0x6d, 0xe4, 0x19, 0x6e, 0x39, 0x58, 0xad, 0x53, 0xf4, 0xcc, 0xa4, 0xe9,
-	0x89, 0xee, 0x42, 0x29, 0x59, 0xf3, 0xb6, 0xd7, 0x27, 0x9e, 0xaf, 0x6a, 0x99, 0xc7, 0xcb, 0x23,
-	0xf1, 0x86, 0x94, 0xa2, 0x0f, 0x64, 0xd5, 0x13, 0xc5, 0x0e, 0xe9, 0x07, 0x91, 0xaf, 0x6a, 0x96,
-	0xc7, 0x63, 0x80, 0x86, 0x12, 0xa3, 0x5d, 0x28, 0x74, 0x69, 0x74, 0x12, 0xf4, 0x4c, 0x79, 0x3e,
-	0x7e, 0xa5, 0xb4, 0xd4, 0x36, 0x95, 0x4d, 0x33, 0x12, 0xec, 0x0c, 0x1b, 0x80, 0xea, 0x23, 0x28,
-	0x9e, 0x13, 0xa3, 0x32, 0x64, 0x9f, 0x93, 0x33, 0x13, 0x9c, 0x5c, 0xa2, 0x6b, 0x90, 0x3f, 0xf5,
-	0xc2, 0x98, 0x98, 0xc0, 0xf4, 0x66, 0x3d, 0xf3, 0x99, 0x55, 0xfd, 0x16, 0xec, 0x24, 0x57, 0x17,
-	0x66, 0xe5, 0x26, 0xd8, 0xc3, 0x98, 0xf7, 0xdb, 0x31, 0x0b, 0x13, 0x86, 0xcb, 0xfd, 0x31, 0x0b,
-	0xd1, 0xdb, 0xe0, 0x9c, 0x10, 0xd1, 0xd5, 0x67, 0xa6, 0xa1, 0x95, 0xe0, 0x98, 0x85, 0xee, 0xaf,
-	0x16, 0xd8, 0xfb, 0xb4, 0xd7, 0x3c, 0x25, 0x91, 0x18, 0x3d, 0x92, 0xd6, 0xf8, 0x91, 0x94, 0x4e,
-	0x0e, 0x78, 0xcf, 0x60, 0xca, 0x25, 0x5a, 0x07, 0x9b, 0x93, 0x53, 0xc2, 0x02, 0x71, 0xa6, 0xe0,
-	0x96, 0xeb, 0xab, 0xa9, 0x94, 0x24, 0x70, 0xb5, 0x96, 0xd1, 0xc2, 0x23, 0x7d, 0xf7, 0x43, 0xb0,
-	0x13, 0x29, 0x72, 0x20, 0xdf, 0xc4, 0xf8, 0x00, 0x97, 0xaf, 0x20, 0x1b, 0x72, 0xbb, 0xcf, 0xb6,
-	0x0f, 0xca, 0x96, 0x14, 0x6e, 0x35, 0x1b, 0xc7, 0x3b, 0xe5, 0x8c, 0xfb, 0x04, 0x56, 0x1a, 0xa4,
-	0x17, 0x44, 0xe6, 0xd1, 0xd5, 0x2e, 0x2e, 0xf2, 0x4a, 0xbb, 0x3f, 0x58, 0x80, 0x8c, 0xf0, 0x20,
-	0x16, 0xc3, 0x58, 0x68, 0xac, 0x2f, 0xa0, 0xa0, 0x33, 0xaa, 0xa0, 0x96, 0xeb, 0xef, 0xa7, 0xa0,
-	0xa6, 0x0d, 0x6a, 0x2d, 0xcd, 0x55, 0x63, 0x85, 0xae, 0x43, 0x81, 0xaa, 0x53, 0x93, 0x1d, 0xb3,
-	0x73, 0xab, 0x50, 0xd0, 0x9a, 0x68, 0x09, 0xb2, 0x07, 0xc7, 0x47, 0xe5, 0x2b, 0x72, 0xd1, 0xc4,
-	0xb8, 0x6c, 0xb9, 0xbf, 0x59, 0x50, 0x6a, 0x46, 0x7e, 0x2a, 0xa6, 0xdb, 0x50, 0x64, 0x44, 0xc4,
-	0x2c, 0x6a, 0x77, 0xa9, 0x4f, 0xcc, 0xab, 0x05, 0x5a, 0xb4, 0x49, 0xfd, 0xa9, 0xc1, 0x91, 0x59,
-	0x78, 0x70, 0x64, 0x5f, 0x7d, 0x70, 0xfc, 0x61, 0x01, 0xda, 0x09, 0x84, 0x66, 0xb3, 0x7c, 0x74,
-	0xb4, 0xaf, 0xd7, 0xa1, 0xa0, 0xfb, 0xdd, 0x90, 0xc4, 0xec, 0x64, 0x2e, 0x19, 0xe1, 0x71, 0xa8,
-	0x73, 0x31, 0x99, 0xcb, 0x69, 0xa0, 0x1a, 0x56, 0xda, 0xd8, 0x58, 0xcd, 0x1a, 0x3a, 0xf2, 0x4e,
-	0x46, 0x3c, 0x4e, 0x23, 0xd5, 0xa2, 0x0e, 0x36, 0x3b, 0xf7, 0x1d, 0x28, 0x68, 0x14, 0xf4, 0x06,
-	0x38, 0xad, 0xe3, 0xcd, 0xcd, 0x66, 0x73, 0xab, 0xb9, 0x55, 0xbe, 0x82, 0x00, 0x0a, 0xdb, 0x1b,
-	0xbb, 0xfb, 0xcd, 0xad, 0xb2, 0xe5, 0xfe, 0x9e, 0x05, 0x7b, 0x8f, 0x76, 0xb4, 0xf7, 0x35, 0xc8,
-	0xbd, 0xe2, 0xac, 0x52, 0x7a, 0xf2, 0x4d, 0x0f, 0x69, 0xaf, 0x4d, 0xa4, 0xf1, 0x85, 0x23, 0x3e,
-	0xe1, 0x3a, 0xb6, 0xc3, 0xa4, 0x89, 0x9e, 0xc1, 0x9b, 0x1d, 0x49, 0xdb, 0xb6, 0x61, 0x9f, 0xb1,
-	0xd6, 0xa9, 0x4f, 0x77, 0xca, 0x14, 0xbd, 0xf1, 0x4a, 0x67, 0x8a, 0xf1, 0xdf, 0xc0, 0xb5, 0x04,
-	0x49, 0xf3, 0xcb, 0x00, 0xea, 0x11, 0x73, 0x7b, 0x0e, 0x67, 0x31, 0xea, 0x4e, 0x13, 0xff, 0x09,
-	0xac, 0xc8, 0x19, 0x9b, 0x76, 0x30, 0x7f, 0xc1, 0xd0, 0x9b, 0x60, 0x2a, 0x2e, 0x91, 0x09, 0xea,
-	0x3e, 0x85, 0x15, 0x4d, 0x00, 0x35, 0xc1, 0x0c, 0x52, 0xe1, 0x02, 0xcf, 0xa6, 0x19, 0x80, 0x4b,
-	0x9d, 0xb4, 0xc0, 0x7d, 0x01, 0x57, 0xd5, 0xb0, 0x3a, 0x18, 0x4a, 0x2e, 0x72, 0x39, 0xb4, 0x85,
-	0xc7, 0x7a, 0x44, 0xf0, 0xe4, 0xaf, 0x67, 0xb6, 0x17, 0x0e, 0xed, 0xcc, 0x02, 0x43, 0xdb, 0x7d,
-	0x17, 0xe0, 0x48, 0x61, 0xee, 0x07, 0x5c, 0x91, 0x5b, 0xdf, 0x60, 0xee, 0x33, 0x3b, 0xa9, 0xa5,
-	0x9d, 0x4f, 0xb4, 0x46, 0x2d, 0x90, 0x1d, 0xb7, 0x80, 0xfb, 0xa7, 0x05, 0x80, 0xe3, 0x28, 0xf1,
-	0x7e, 0xa1, 0xff, 0xe4, 0x63, 0xb8, 0xea, 0x93, 0x21, 0x89, 0x7c, 0x12, 0x75, 0x03, 0xc2, 0x4d,
-	0x50, 0xe9, 0x81, 0x3e, 0x76, 0x18, 0xa7, 0x94, 0xff, 0xb7, 0xaf, 0x4c, 0xfd, 0xef, 0x2c, 0xac,
-	0x1c, 0x86, 0x9e, 0x38, 0xa1, 0x6c, 0xa0, 0x2a, 0xf2, 0x44, 0x4e, 0x82, 0x06, 0xd8, 0xf2, 0x52,
-	0xf5, 0xe1, 0x98, 0x09, 0x58, 0xad, 0x5c, 0xf2, 0x01, 0xe1, 0xe8, 0x73, 0xb0, 0x9f, 0x06, 0x61,
-	0xa8, 0xd6, 0x97, 0x6a, 0x55, 0xd3, 0x3d, 0x96, 0x74, 0xef, 0x47, 0x16, 0x7a, 0x0c, 0x79, 0xa5,
-	0x87, 0x6e, 0x4e, 0xdb, 0x9a, 0xbc, 0x5f, 0x6e, 0xfc, 0x10, 0xb2, 0x38, 0x8e, 0xd0, 0x8d, 0xc9,
-	0x4f, 0xd9, 0x5c, 0xc3, 0xaf, 0x60, 0x69, 0x33, 0xa4, 0x9d, 0x0e, 0x61, 0x73, 0xe2, 0x9e, 0x85,
-	0x70, 0xc8, 0xc8, 0xd0, 0x63, 0x64, 0x51, 0x84, 0x2d, 0x28, 0xca, 0xe4, 0x1f, 0x99, 0x06, 0x98,
-	0x8d, 0x72, 0x19, 0x5f, 0xea, 0x7f, 0xe5, 0x60, 0x79, 0xac, 0xac, 0xaa, 0x7a, 0x00, 0xa5, 0x1d,
-	0x62, 0x7a, 0x53, 0x7f, 0x4e, 0xe6, 0x80, 0xaf, 0xce, 0xfe, 0xff, 0xa0, 0x3d, 0x28, 0xb5, 0x26,
-	0x00, 0xe7, 0x98, 0xcc, 0x8a, 0xba, 0x7c, 0x18, 0x87, 0xe1, 0x36, 0xa3, 0x83, 0xd1, 0xef, 0x67,
-	0xe2, 0x77, 0x3b, 0xea, 0xcb, 0xcb, 0x51, 0x1a, 0xb0, 0x7c, 0x18, 0xf3, 0xfe, 0x11, 0x7d, 0x0d,
-	0x8c, 0x2f, 0xe5, 0x4c, 0xf7, 0x44, 0xcc, 0x17, 0x2d, 0x60, 0x03, 0x9c, 0xd6, 0x59, 0xd4, 0xdd,
-	0xa7, 0x5d, 0x2f, 0x5c, 0x14, 0x63, 0x13, 0x40, 0x62, 0x60, 0x32, 0xa0, 0x62, 0x61, 0x26, 0xed,
-	0xc1, 0x8a, 0xe1, 0xe2, 0x36, 0x65, 0x98, 0x74, 0x49, 0x70, 0xba, 0x28, 0x56, 0xfd, 0x67, 0x0b,
-	0x8a, 0x2d, 0xc2, 0x4e, 0x83, 0x2e, 0x51, 0x64, 0xda, 0x00, 0xbb, 0xd5, 0x8f, 0x85, 0x4f, 0x5f,
-	0x46, 0xaf, 0x13, 0x23, 0x09, 0x4f, 0x8e, 0x87, 0xbe, 0xb7, 0x70, 0x8c, 0x9d, 0x82, 0x9a, 0xe8,
-	0x0f, 0xfe, 0x0b, 0x00, 0x00, 0xff, 0xff, 0xd2, 0x0a, 0x9c, 0xf8, 0x96, 0x10, 0x00, 0x00,
+	// 1493 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x57, 0x5d, 0x6e, 0x1b, 0x47,
+	0x12, 0xf6, 0xf0, 0x4f, 0xc3, 0xa2, 0x56, 0xa2, 0x7a, 0xbd, 0x36, 0x45, 0x1b, 0xb2, 0x76, 0xf6,
+	0xc7, 0xde, 0x35, 0x40, 0xef, 0xd2, 0xd8, 0x4d, 0x2c, 0xc3, 0x31, 0x24, 0x8a, 0x92, 0x25, 0x2b,
+	0xa6, 0xd2, 0x24, 0xf3, 0x90, 0x17, 0x62, 0xc8, 0x69, 0x91, 0x13, 0x0f, 0xa7, 0x89, 0xee, 0x1e,
+	0x19, 0xba, 0x41, 0x12, 0x20, 0x2f, 0x41, 0x10, 0xe4, 0x04, 0x41, 0x2e, 0x92, 0x13, 0xe4, 0x06,
+	0xc9, 0x53, 0x6e, 0x11, 0xf4, 0xcf, 0x90, 0x1c, 0x52, 0xa2, 0x04, 0x1a, 0xc8, 0x5b, 0x57, 0x4d,
+	0xd5, 0xc7, 0xaa, 0xea, 0xaf, 0xab, 0x8a, 0x60, 0x73, 0x51, 0x19, 0x31, 0x2a, 0x28, 0x2a, 0x70,
+	0x41, 0x43, 0xc2, 0xc5, 0x80, 0xd1, 0x77, 0xe5, 0xad, 0x3e, 0xa5, 0xfd, 0x80, 0x3c, 0x51, 0x9f,
+	0xba, 0xd1, 0xd9, 0x13, 0x2f, 0x62, 0xae, 0xf0, 0x69, 0xa8, 0x8d, 0xcb, 0x0f, 0x66, 0xbf, 0x0b,
+	0x7f, 0x48, 0xb8, 0x70, 0x87, 0x23, 0x6d, 0xe0, 0x7c, 0x06, 0xab, 0xcd, 0x01, 0x09, 0x82, 0x1a,
+	0x1d, 0x0e, 0xdd, 0xd0, 0x43, 0x25, 0x58, 0xe9, 0xe9, 0x63, 0xc9, 0xda, 0x4e, 0x3f, 0xca, 0xe3,
+	0x58, 0x44, 0xf7, 0x21, 0xef, 0xf9, 0x8c, 0xf4, 0x04, 0x65, 0x17, 0xa5, 0xd4, 0xb6, 0xf5, 0x28,
+	0x8f, 0x27, 0x0a, 0x84, 0x20, 0x33, 0xa0, 0x5c, 0x94, 0xd2, 0xea, 0x83, 0x3a, 0x3b, 0x1f, 0xc3,
+	0x3a, 0x26, 0x23, 0xca, 0x7d, 0x69, 0xd1, 0x14, 0xae, 0x20, 0x68, 0x0b, 0x80, 0x8d, 0x55, 0x06,
+	0x65, 0x4a, 0x83, 0xca, 0x60, 0x33, 0x72, 0xee, 0x73, 0x9f, 0x86, 0x06, 0x6a, 0x2c, 0x3b, 0xdf,
+	0x59, 0x60, 0xe3, 0x28, 0xd4, 0x40, 0xcf, 0x00, 0xb8, 0x70, 0x99, 0xe8, 0xc8, 0x84, 0x4a, 0xd6,
+	0xb6, 0xf5, 0xa8, 0x50, 0x2d, 0x57, 0x74, 0xb6, 0x95, 0x38, 0xdb, 0x4a, 0x2b, 0xce, 0x16, 0xe7,
+	0x95, 0xb5, 0x94, 0x65, 0x8a, 0x2c, 0x0a, 0x43, 0x3f, 0xec, 0xab, 0x00, 0x6c, 0x1c, 0x8b, 0xe8,
+	0x7f, 0x60, 0x93, 0xd0, 0xd3, 0x90, 0xe9, 0x6b, 0x21, 0x57, 0x48, 0xe8, 0x49, 0xc9, 0xf9, 0xc5,
+	0x02, 0xd8, 0x8b, 0xfc, 0xc0, 0x23, 0xec, 0x98, 0x76, 0xd1, 0xd3, 0xe9, 0x12, 0x4a, 0x90, 0xcd,
+	0xca, 0xd4, 0x95, 0x55, 0xa6, 0xcb, 0x3d, 0xa9, 0xee, 0x63, 0xc8, 0x72, 0x99, 0x98, 0x0a, 0xa9,
+	0x50, 0xfd, 0x4b, 0xc2, 0x25, 0xce, 0x1a, 0x6b, 0x1b, 0xb4, 0x03, 0x05, 0x7e, 0xc1, 0x05, 0x19,
+	0x4e, 0x87, 0xba, 0x39, 0x17, 0xea, 0xbe, 0xe1, 0x02, 0x06, 0x6d, 0xad, 0xb2, 0xff, 0x3f, 0xe4,
+	0x23, 0x4e, 0x98, 0xf6, 0xcc, 0x5c, 0xe7, 0x69, 0x4b, 0x5b, 0x95, 0xe4, 0x0e, 0x14, 0x26, 0x39,
+	0x72, 0xf4, 0x18, 0x32, 0x9f, 0xd3, 0x2e, 0x57, 0x24, 0x29, 0x54, 0xef, 0x26, 0xc2, 0x9d, 0xd8,
+	0x61, 0x65, 0xe4, 0x7c, 0x95, 0x81, 0x8d, 0x43, 0x5f, 0x4c, 0xc8, 0x70, 0x14, 0x9e, 0x51, 0xb4,
+	0x0b, 0x76, 0x97, 0xb9, 0x61, 0x6f, 0x40, 0x62, 0x98, 0x7f, 0x24, 0x60, 0xe6, 0x3c, 0x2a, 0x7b,
+	0xca, 0x1c, 0x8f, 0xdd, 0x50, 0x1d, 0xf2, 0xd1, 0x88, 0x0b, 0x46, 0xdc, 0x21, 0x2f, 0xa5, 0x14,
+	0xc6, 0xc3, 0x6b, 0x30, 0xda, 0xc6, 0x1e, 0x4f, 0x3c, 0xcb, 0xdf, 0xa4, 0x20, 0xa7, 0xb1, 0x25,
+	0x8f, 0x43, 0xd7, 0x30, 0x2a, 0x8f, 0xd5, 0x39, 0x41, 0xca, 0x54, 0x92, 0x94, 0xe8, 0x21, 0xac,
+	0xc7, 0x67, 0xde, 0x71, 0x07, 0xc4, 0xf5, 0xd4, 0x75, 0x64, 0xf1, 0xda, 0x58, 0xbd, 0x2b, 0xb5,
+	0xe8, 0x5f, 0x50, 0x9c, 0x18, 0x76, 0xc9, 0xc0, 0x0f, 0x3d, 0x55, 0xfe, 0x2c, 0x9e, 0x00, 0xec,
+	0x29, 0x35, 0x3a, 0x82, 0x5c, 0x8f, 0x86, 0x67, 0x7e, 0xbf, 0x94, 0x55, 0x29, 0xfd, 0xf7, 0x46,
+	0x65, 0xa9, 0xd4, 0x94, 0x4f, 0x3d, 0x14, 0xec, 0x02, 0x1b, 0x80, 0xf2, 0x33, 0x28, 0x4c, 0xa9,
+	0x51, 0x11, 0xd2, 0x6f, 0xc9, 0x85, 0x49, 0x4e, 0x1e, 0xd1, 0x6d, 0xc8, 0x9e, 0xbb, 0x41, 0x44,
+	0x4c, 0x62, 0x5a, 0xd8, 0x49, 0x7d, 0x68, 0x95, 0x3f, 0x05, 0x3b, 0xae, 0xd5, 0xa5, 0x55, 0xd9,
+	0x04, 0x7b, 0x14, 0xf1, 0x41, 0x27, 0x62, 0x81, 0x71, 0x5e, 0x91, 0x72, 0x9b, 0x05, 0xe8, 0x1e,
+	0xe4, 0xcf, 0x88, 0xe8, 0xe9, 0x6f, 0xe6, 0x19, 0x2b, 0x45, 0x9b, 0x05, 0xce, 0xf7, 0x16, 0xd8,
+	0x27, 0xb4, 0x5f, 0x3f, 0x27, 0xa1, 0x18, 0xb7, 0x0d, 0x6b, 0xd2, 0x36, 0x64, 0x90, 0x43, 0xde,
+	0x37, 0x98, 0xf2, 0x88, 0x76, 0xc0, 0xe6, 0xe4, 0x9c, 0x30, 0x5f, 0x5c, 0x28, 0xb8, 0xb5, 0xea,
+	0x56, 0xa2, 0x24, 0x31, 0x5c, 0xa5, 0x69, 0xac, 0xf0, 0xd8, 0xde, 0xf9, 0x37, 0xd8, 0xb1, 0x16,
+	0xe5, 0x21, 0x5b, 0xc7, 0xb8, 0x81, 0x8b, 0xb7, 0x90, 0x0d, 0x99, 0xa3, 0x37, 0x07, 0x8d, 0xa2,
+	0x25, 0x95, 0xfb, 0xf5, 0xbd, 0xf6, 0x61, 0x31, 0xe5, 0xbc, 0x82, 0x8d, 0x3d, 0xd2, 0xf7, 0x43,
+	0xf3, 0x3a, 0x75, 0x88, 0xcb, 0x3c, 0x67, 0xe7, 0x0b, 0x0b, 0x90, 0x51, 0x36, 0x22, 0x31, 0x8a,
+	0x84, 0xc6, 0xfa, 0x08, 0x72, 0xba, 0xa2, 0x0a, 0x6a, 0xad, 0xfa, 0xcf, 0x04, 0xd4, 0xbc, 0x43,
+	0xa5, 0xa9, 0xb9, 0x6a, 0xbc, 0xd0, 0x1d, 0xc8, 0x51, 0xf5, 0xd5, 0x54, 0xc7, 0x48, 0x4e, 0x19,
+	0x72, 0xda, 0x12, 0xad, 0x40, 0xba, 0xd1, 0x6e, 0x15, 0x6f, 0xc9, 0x43, 0x1d, 0xe3, 0xa2, 0xe5,
+	0xfc, 0x60, 0xc1, 0x7a, 0x3d, 0xf4, 0x12, 0x39, 0x3d, 0x80, 0x02, 0x23, 0x22, 0x62, 0x61, 0xa7,
+	0x47, 0x3d, 0x7d, 0xad, 0x59, 0xd9, 0x87, 0xa5, 0xaa, 0x46, 0xbd, 0xb9, 0x0e, 0x93, 0x5a, 0xba,
+	0xc3, 0xa4, 0x6f, 0xde, 0x61, 0x7e, 0xb2, 0x00, 0x1d, 0xfa, 0x42, 0xb3, 0xb9, 0xe5, 0xf2, 0xb7,
+	0x3a, 0xd6, 0x3b, 0x90, 0xd3, 0xef, 0xdd, 0x90, 0xc4, 0x48, 0xb2, 0x96, 0x8c, 0xf0, 0x28, 0xd0,
+	0xb5, 0x98, 0xad, 0xe5, 0x3c, 0x50, 0x05, 0x2b, 0x6b, 0x6c, 0xbc, 0x16, 0x8d, 0x1a, 0xf9, 0x9b,
+	0x8c, 0xb8, 0x9c, 0x86, 0xea, 0x89, 0xe6, 0xb1, 0x91, 0x9c, 0xbf, 0x41, 0x4e, 0xa3, 0xa0, 0x3f,
+	0x41, 0xbe, 0xd9, 0xae, 0xd5, 0xea, 0xf5, 0xfd, 0xfa, 0x7e, 0xf1, 0x16, 0x02, 0xc8, 0x1d, 0xec,
+	0x1e, 0x9d, 0xd4, 0xf7, 0x8b, 0x96, 0xf3, 0x63, 0x1a, 0xec, 0x63, 0xda, 0xd5, 0xd1, 0x57, 0x20,
+	0x73, 0xc3, 0x09, 0xa5, 0xec, 0x50, 0x15, 0xf2, 0x01, 0xed, 0x77, 0x88, 0x74, 0xbe, 0x74, 0x16,
+	0xc4, 0x5c, 0xc7, 0x76, 0x10, 0x3f, 0xa2, 0x37, 0xf0, 0xe7, 0xae, 0xa4, 0x6d, 0xc7, 0xb0, 0xcf,
+	0x78, 0xeb, 0xd2, 0x27, 0x5f, 0xca, 0x1c, 0xbd, 0xf1, 0x46, 0x77, 0x8e, 0xf1, 0x9f, 0xc0, 0xed,
+	0x18, 0x49, 0xf3, 0xcb, 0x00, 0xea, 0x69, 0xf1, 0xe0, 0x1a, 0xce, 0x62, 0xd4, 0x9b, 0x27, 0xfe,
+	0x2b, 0xd8, 0x90, 0x93, 0x35, 0x19, 0x60, 0x56, 0xe1, 0xdd, 0x4f, 0xe0, 0xcd, 0x30, 0x15, 0xaf,
+	0x93, 0x19, 0xea, 0xbe, 0x86, 0x0d, 0x4d, 0x80, 0x8e, 0x70, 0xf9, 0x5b, 0x83, 0x94, 0xbb, 0x24,
+	0xb2, 0x79, 0x06, 0xe0, 0xf5, 0x6e, 0x52, 0xe1, 0x7c, 0x6d, 0xc1, 0xaa, 0x9a, 0x56, 0x8d, 0x91,
+	0x24, 0x23, 0x97, 0xa4, 0x18, 0x05, 0xae, 0x38, 0xa3, 0x6c, 0x68, 0xe8, 0x36, 0x96, 0xe5, 0xde,
+	0x20, 0x5c, 0xd6, 0x27, 0x42, 0x8f, 0x9a, 0x3c, 0x8e, 0x45, 0x74, 0x28, 0x7b, 0x7b, 0xdc, 0x92,
+	0x3b, 0x7a, 0x8e, 0xa7, 0x2f, 0x49, 0x6e, 0x66, 0x1b, 0x92, 0x9d, 0x3f, 0xa1, 0x70, 0xfe, 0x0e,
+	0xd0, 0x52, 0x98, 0x27, 0x3e, 0x57, 0xcc, 0xd7, 0xbf, 0x60, 0x56, 0x31, 0x23, 0x49, 0x2b, 0x9d,
+	0x59, 0x6c, 0x35, 0x7e, 0x1f, 0xe9, 0xc9, 0xfb, 0x70, 0x7e, 0xb5, 0x00, 0x70, 0x14, 0xde, 0x24,
+	0xb3, 0xcb, 0xe2, 0x4f, 0x2d, 0x11, 0x3f, 0x7a, 0x0e, 0xab, 0x1e, 0x19, 0x91, 0xd0, 0x23, 0x61,
+	0xcf, 0x27, 0xdc, 0x14, 0x21, 0xb9, 0x1d, 0x4c, 0x12, 0xc4, 0x09, 0xe3, 0xe9, 0x46, 0x9b, 0xb9,
+	0x71, 0xa3, 0xfd, 0xcd, 0x82, 0xb5, 0x5a, 0x40, 0xbb, 0x5d, 0xc2, 0xfe, 0xd0, 0x4c, 0x77, 0xc6,
+	0x77, 0xa3, 0x07, 0x92, 0x93, 0x7c, 0x15, 0x89, 0x88, 0x4c, 0xca, 0xf1, 0xfd, 0xc9, 0x99, 0x7b,
+	0x46, 0x59, 0x4f, 0xaf, 0x5f, 0x36, 0xd6, 0x82, 0xb3, 0x0d, 0x39, 0x6d, 0x27, 0x9b, 0x49, 0xb3,
+	0xd1, 0xc6, 0xb5, 0xba, 0x6e, 0x2c, 0x8d, 0x76, 0xeb, 0xb4, 0xdd, 0x2a, 0x5a, 0xce, 0x5f, 0xa1,
+	0x70, 0xea, 0x87, 0xfd, 0x38, 0x4f, 0x04, 0x99, 0x91, 0x5c, 0x62, 0xcd, 0xec, 0x94, 0x67, 0x67,
+	0x1b, 0x40, 0x9a, 0x98, 0x26, 0x25, 0x2d, 0xe8, 0x94, 0x05, 0x0d, 0xfb, 0xd5, 0x2f, 0xd3, 0xb0,
+	0x71, 0x6a, 0xca, 0xa1, 0xa8, 0xff, 0x4a, 0xce, 0xdc, 0xe7, 0x90, 0x55, 0x02, 0xda, 0x9c, 0xdf,
+	0xe4, 0xcc, 0xef, 0x95, 0x93, 0x7d, 0x28, 0xee, 0x70, 0xff, 0xb1, 0xd0, 0x07, 0x90, 0xc6, 0x51,
+	0x88, 0xee, 0xce, 0xee, 0xac, 0xd7, 0x3a, 0xbe, 0x84, 0x15, 0x53, 0x29, 0x74, 0x6f, 0x41, 0xfd,
+	0xae, 0x06, 0x78, 0x0e, 0xd9, 0x5a, 0x40, 0xdc, 0x70, 0xa9, 0xb0, 0x5f, 0xc0, 0xca, 0x29, 0x23,
+	0x23, 0x97, 0x91, 0xa5, 0xdc, 0x77, 0xa1, 0x20, 0x49, 0xdc, 0x32, 0x3d, 0x60, 0x01, 0xc4, 0x55,
+	0xfc, 0xaf, 0x7e, 0x9b, 0x85, 0xb5, 0x09, 0xd3, 0xd4, 0x45, 0x34, 0x60, 0xfd, 0x90, 0x98, 0xc6,
+	0xa5, 0x37, 0x37, 0xb4, 0x90, 0x99, 0xe5, 0xad, 0xc5, 0xcb, 0x21, 0x3a, 0x86, 0xf5, 0xe6, 0x0c,
+	0xe0, 0x35, 0x2e, 0x57, 0xa7, 0xbc, 0x0f, 0xc5, 0xd3, 0x28, 0x08, 0x0e, 0x18, 0x1d, 0x8e, 0x57,
+	0xc3, 0x99, 0xd5, 0x7f, 0xdc, 0x97, 0xae, 0x46, 0xd9, 0x83, 0xb5, 0xd3, 0x88, 0x0f, 0x5a, 0xf4,
+	0x3d, 0x30, 0x5e, 0xca, 0x85, 0xc7, 0x15, 0x11, 0xbf, 0xa6, 0x3a, 0x0b, 0x82, 0xc8, 0x37, 0x2f,
+	0xc2, 0xde, 0x09, 0xed, 0xb9, 0xc1, 0xb2, 0x18, 0x35, 0x00, 0x89, 0x81, 0xc9, 0x90, 0x0a, 0xb2,
+	0x2c, 0xc8, 0x31, 0x6c, 0x18, 0x16, 0x1e, 0x50, 0x86, 0x49, 0x8f, 0xf8, 0xe7, 0x4b, 0x63, 0xd5,
+	0x61, 0x15, 0x93, 0xae, 0xcb, 0x49, 0x7b, 0xe4, 0xb9, 0x4b, 0x87, 0x54, 0xfd, 0x39, 0x05, 0x85,
+	0x26, 0x61, 0xe7, 0x7e, 0x8f, 0x28, 0x4e, 0x3e, 0x83, 0x8c, 0x6c, 0x2a, 0xa8, 0x94, 0x70, 0x98,
+	0x6a, 0x45, 0x33, 0x0c, 0x9f, 0xea, 0x40, 0x7b, 0x60, 0xcb, 0x8b, 0x54, 0x7f, 0x19, 0x17, 0x47,
+	0x53, 0xba, 0xe2, 0x2f, 0x24, 0x47, 0x2f, 0xc0, 0x7e, 0xed, 0x07, 0x81, 0x3a, 0x5f, 0x69, 0xb5,
+	0xe8, 0x9d, 0xda, 0xcd, 0x41, 0x24, 0x3c, 0xfa, 0x2e, 0x7c, 0x9f, 0x8b, 0x26, 0xc1, 0xd9, 0x7b,
+	0x55, 0xb5, 0x9b, 0x53, 0x3b, 0xdf, 0xd3, 0xdf, 0x03, 0x00, 0x00, 0xff, 0xff, 0xc0, 0xb6, 0x4a,
+	0xe1, 0xca, 0x11, 0x00, 0x00,
 }

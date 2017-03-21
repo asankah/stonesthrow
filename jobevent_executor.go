@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -12,16 +13,22 @@ import (
 
 type JobEventExecutor struct {
 	host         string
+	workdir      string
 	processAdder ProcessAdder
 	sender       JobEventSender
 }
 
-func NewJobEventExecutor(host string, processAdder ProcessAdder, sender JobEventSender) *JobEventExecutor {
+func NewJobEventExecutor(
+	host string,
+	workdir string,
+	processAdder ProcessAdder,
+	sender JobEventSender) *JobEventExecutor {
 	if sender == nil {
 		sender = NilJobEventSender{}
 	}
 	return &JobEventExecutor{
 		host:         host,
+		workdir:      workdir,
 		processAdder: processAdder,
 		sender:       sender}
 }
@@ -122,9 +129,9 @@ func (e JobEventExecutor) execute(ctx context.Context, workdir string, captureSt
 	}
 	e.sender.Send(&JobEvent{
 		EndCommandEvent: &EndCommandEvent{
-			ReturnCode:   fake_return_code,
-			SystemTimeNs: cmd.ProcessState.SystemTime().Nanoseconds(),
-			UserTimeNs:   cmd.ProcessState.UserTime().Nanoseconds()}})
+			ReturnCode: fake_return_code,
+			SystemTime: NewDurationFromDuration(cmd.ProcessState.SystemTime()),
+			UserTime:   NewDurationFromDuration(cmd.ProcessState.UserTime())}})
 
 	if cmd.ProcessState.Success() {
 		return outputString, nil
@@ -147,15 +154,15 @@ func (e JobEventExecutor) ExecuteInWorkDirPassthrough(workdir string, ctx contex
 }
 
 func (e JobEventExecutor) ExecutePassthrough(ctx context.Context, command ...string) error {
-	return NewInvalidArgumentError("Need workdir")
+	return e.ExecuteInWorkDirPassthrough(e.workdir, ctx, command...)
 }
 
 func (e JobEventExecutor) ExecuteNoStream(ctx context.Context, command ...string) (string, error) {
-	return "", NewInvalidArgumentError("Need workdir")
+	return e.ExecuteInWorkDirNoStream(e.workdir, ctx, command...)
 }
 
 func (e JobEventExecutor) Execute(ctx context.Context, command ...string) (string, error) {
-	return "", NewInvalidArgumentError("Need workdir")
+	return e.ExecuteInWorkDir(e.workdir, ctx, command...)
 }
 
 func RunCommandWithWorkDir(ctx context.Context, workdir string, command ...string) (string, error) {

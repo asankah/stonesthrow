@@ -1,8 +1,16 @@
 package stonesthrow
 
+import "io"
+
 type OutputSink interface {
-	SendRepositoryInfo(*GitRepositoryInfo) error
-	SendTargetList(*TargetList) error
-	SendBuilderJobs(*BuilderJobs) error
-	JobEventSender
+	OnGitRepositoryInfo(*GitRepositoryInfo) error
+	OnTargetList(*TargetList) error
+	OnBuilderJobs(*BuilderJobs) error
+	OnJobEvent(*JobEvent) error
+	OnPong(*PingResult) error
+
+	Drain(JobEventReceiver) error
+	DrainReader(CommandOutputEvent, io.Reader) error
+
+	Send(*JobEvent) error
 }

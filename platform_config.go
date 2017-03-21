@@ -70,6 +70,11 @@ func (p *PlatformConfig) Validate() error {
 	return nil
 }
 
+func (p *PlatformConfig) RelativePath(paths ...string) string {
+	paths = append([]string{p.BuildPath}, paths...)
+	return filepath.Join(paths...)
+}
+
 func (p *PlatformConfig) GetAllTargets(testOnly bool) (map[string]Command, error) {
 	return map[string]Command{
 		"net_unittests":        {Aliases: []string{"nu"}},

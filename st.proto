@@ -12,13 +12,6 @@ message ShellCommand {
   string host = 3;
 }
 
-message ShellTask {
-  ShellCommand command = 1;
-  RunState state = 2;
-  google.protobuf.Duration system_time = 3;
-  google.protobuf.Duration user_time = 4;
-}
-
 message RepositoryState {
   string repository = 2;
   string revision = 3;
@@ -31,11 +24,10 @@ message RunState {
 }
 
 message BuilderJob {
-  int32 id = 1;
-  string request = 2;
-  RepositoryState repository_state = 3;
-  RunState run_state = 4;
-  repeated ShellTask shell_tasks = 5;
+  ShellCommand command = 1;
+  RunState state = 2;
+  google.protobuf.Duration system_time = 3;
+  google.protobuf.Duration user_time = 4;
 }
 
 message BuilderJobs {
@@ -114,8 +106,9 @@ message JobEvent {
 }
 
 message BuildOptions {
-  repeated string targets = 1;
-  RepositoryState repository_state = 2;
+  string platform = 1;
+  repeated string targets = 2;
+  RepositoryState repository_state = 3;
 }
 
 message TargetList {
@@ -127,20 +120,38 @@ message BranchList {
 }
 
 message RunOptions {
-  ShellCommand command = 1;
-  TargetList dependencies = 2;
-  RepositoryState repository_state = 3;
+  string platform = 1;
+  RepositoryState repository_state = 2;
+  TargetList dependencies = 3;
+  ShellCommand command = 4;
+}
+
+message ClobberOptions {
+  enum Target {
+    SOURCE = 0;
+    OUTPUT =1;
+  }
+  string platform = 1;
+  RepositoryState repository_state = 2;
+  Target target = 3;
+  bool force = 4;
+}
+
+message PingOptions {
+  string ping = 1;
+}
+
+message PingResult {
+  string pong = 1;
 }
 
 service PlatformBuildHost {
-  rpc ListJobs(RepositoryState) returns (BuilderJobs);
-  rpc KillJobs(BuilderJobs) returns (stream JobEvent);
-
   rpc Build(BuildOptions) returns (stream JobEvent);
   rpc Run(RunOptions) returns (stream JobEvent);
-  rpc Clobber(RepositoryState) returns (stream JobEvent);
-  rpc Prepare(RepositoryState) returns (stream JobEvent);
-  rpc ListTargets(RepositoryState) returns (TargetList);
+  rpc Clobber(ClobberOptions) returns (stream JobEvent);
+  rpc Clean(BuildOptions) returns (stream JobEvent);
+  rpc Prepare(BuildOptions) returns (stream JobEvent);
+  rpc ListTargets(BuildOptions) returns (TargetList);
 }
 
 service RepositoryHost {
@@ -152,9 +163,13 @@ service RepositoryHost {
   rpc SyncLocal(RepositoryState) returns (stream JobEvent);
   rpc SyncRemote(RepositoryState) returns (stream JobEvent);
   rpc PrepareForReceive(RepositoryState) returns (stream JobEvent);
+  rpc RebaseUpdate(RepositoryState) returns (stream JobEvent);
 }
 
 service ServiceHost {
+  rpc Ping(PingOptions) returns (PingResult);
+  rpc ListJobs(RepositoryState) returns (BuilderJobs);
+  rpc KillJobs(BuilderJobs) returns (stream JobEvent);
   rpc Shutdown(RepositoryState) returns (stream JobEvent);
   rpc SelfUpdate(RepositoryState) returns (stream JobEvent) ;
 }

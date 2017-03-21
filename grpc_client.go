@@ -6,6 +6,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"time"
 )
@@ -40,11 +41,11 @@ func connectViaSsh(ctx context.Context, client_config, server_config Config, rem
 
 	writeEnd, err := cmd.StdinPipe()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	readEnd, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	cmd.Stderr = os.Stderr
 	cmd.Start()
@@ -57,7 +58,7 @@ func connectViaSsh(ctx context.Context, client_config, server_config Config, rem
 		}))
 }
 
-func ConnectTo(client_config, server_config Config) (*grpc.ClientConn, error) {
+func ConnectTo(ctx context.Context, client_config, server_config Config) (*grpc.ClientConn, error) {
 	if !client_config.IsValid() || !server_config.IsValid() {
 		return nil, NewConfigIncompleteError("Client or server configuration is invalid")
 	}
@@ -65,14 +66,14 @@ func ConnectTo(client_config, server_config Config) (*grpc.ClientConn, error) {
 	// If the server has an endpoint on the client machine, then talk to that endpoint.
 	for _, endpoint := range server_config.Platform.Endpoints {
 		if endpoint.Host == client_config.Host {
-			return connectToLocalEndpoint(client_config, server_config, endpoint)
+			return connectToLocalEndpoint(ctx, client_config, server_config, endpoint)
 		}
 	}
 
 	// If we can ssh directly to the server, then do so.
 	for _, remote := range client_config.Host.Remotes {
 		if remote.Host == server_config.Host {
-			return connectViaSsh(client_config, server_config, *remote)
+			return connectViaSsh(ctx, client_config, server_config, *remote)
 		}
 	}
 
@@ -80,7 +81,7 @@ func ConnectTo(client_config, server_config Config) (*grpc.ClientConn, error) {
 	for _, remote := range client_config.Host.Remotes {
 		for _, endpoint := range server_config.Platform.Endpoints {
 			if endpoint.Host == remote.Host {
-				return connectViaSsh(client_config, server_config, *remote)
+				return connectViaSsh(ctx, client_config, server_config, *remote)
 			}
 		}
 	}

@@ -1,5 +1,7 @@
 package stonesthrow
 
+import "fmt"
+
 type JobEventSender interface {
 	Send(*JobEvent) error
 }
