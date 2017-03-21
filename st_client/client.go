@@ -7,13 +7,10 @@ import (
 	"github.com/asankah/stonesthrow"
 	"log"
 	"os"
-	"os/exec"
 	"path"
 )
 
 func main() {
-	stonesthrow.InitializeCommands()
-
 	defaultServerPlatform := path.Base(os.Args[0])
 	defaultConfig := stonesthrow.GetDefaultConfigFile()
 
@@ -78,19 +75,9 @@ func main() {
 		log.Fatal("No arguments")
 	}
 
-	// Need to locally handle reload.
-	if len(arguments) == 1 && arguments[0] == "reload" && clientConfig.Host == serverConfig.Host {
-		cmd := exec.Command("st_reload",
-			"--pid", fmt.Sprintf("%d", os.Getpid()),
-			"--package", "github.com/asankah/stonesthrow")
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err = cmd.Start()
-		if err != nil {
-			os.Exit(1)
-		}
-		return
+	rpc_connection, err := stonesthrow.ConnectTo(context.Background(), clientConfig, serverConfig)
+	if err != nil {
+		log.Fatalf("Can't connect to remote. %#v (%s)", err, err.Error())
 	}
 
 	formatter := ConsoleFormatter{config: &serverConfig, porcelain: *porcelain}

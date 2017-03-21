@@ -1,8 +1,8 @@
 package stonesthrow
 
 import (
-	"context"
 	"fmt"
+	"golang.org/x/net/context"
 	"regexp"
 	"strconv"
 	"strings"
@@ -195,7 +195,7 @@ func (r *RepositoryHostServerImpl) SyncRemote(rs *RepositoryState, s RepositoryH
 	_, commands := r.GetGitCommandsForJobEventSender(s)
 
 	old_deps_hash, _ := commands.GitHashObject(s.Context(), r.Repository.RelativePath("DEPS"))
-	hash, err := commands.GitTreeForRevision(s.Context(), rs.GetRevision())
+	_, err := commands.GitTreeForRevision(s.Context(), rs.GetRevision())
 	if err != nil {
 		err = commands.GitFetchBuilderHead(s.Context())
 	}
@@ -232,6 +232,9 @@ func (r *RepositoryHostServerImpl) RebaseUpdate(rs *RepositoryState, s Repositor
 	status, err := commands.GitStatus(s.Context())
 	if err != nil {
 		return err
+	}
+	if status.HasUnmerged {
+		return NewUnmergedChangesExistError("can't rebase-update with dirty tree")
 	}
 
 	previousHead, _ := commands.GitCurrentBranch(s.Context())
@@ -275,9 +278,9 @@ func GetRepositoryState(ctx context.Context, r *RepositoryConfig, e Executor, cr
 	var err error
 	commands := RepositoryCommands{Repository: r, Executor: e}
 	if create_builder_head {
-		revision, err := commands.GitCreateBuilderHead(ctx)
+		revision, err = commands.GitCreateBuilderHead(ctx)
 	} else {
-		revision, err := commands.GitRevision(ctx, "HEAD")
+		revision, err = commands.GitRevision(ctx, "HEAD")
 	}
 	if err != nil {
 		return nil, err

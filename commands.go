@@ -116,7 +116,6 @@ var DefaultHandlers = []CommandHandler{
 		},
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			outValue := f.Lookup("out")
-			srcValue := f.Lookup("src")
 			forceValue := f.Lookup("force")
 
 			builder_client := NewPlatformBuildHostClient(conn.RpcConnection)
@@ -151,6 +150,9 @@ var DefaultHandlers = []CommandHandler{
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			service_host_client := NewServiceHostClient(conn.RpcConnection)
 			ping_result, err := service_host_client.Ping(ctx, &PingOptions{Ping: "Ping!"})
+			if err != nil {
+				return err
+			}
 			return conn.Sink.OnPong(ping_result)
 		}},
 
@@ -163,8 +165,8 @@ var DefaultHandlers = []CommandHandler{
 				return err
 			}
 			event_stream, err := build_host_client.Prepare(ctx, &BuildOptions{
-				Platform:        conn.ServerConfig.Platform,
-				RepositoryState: &repo_state})
+				Platform:        conn.ServerConfig.Platform.Name,
+				RepositoryState: repo_state})
 			if err != nil {
 				return err
 			}
@@ -175,7 +177,6 @@ var DefaultHandlers = []CommandHandler{
 		`Pull a specific branch or branches from upstream.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			if len(f.Args()) == 0 {
-				s.channel.Error("Need to specify branch")
 				return NewInvalidArgumentError("No branch specified")
 			}
 			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
@@ -209,7 +210,7 @@ var DefaultHandlers = []CommandHandler{
 			if err != nil {
 				return err
 			}
-			event_stream, err := repo_host_client.Status(ctx, &repo_state)
+			event_stream, err := repo_host_client.Status(ctx, repo_state)
 			if err != nil {
 				return err
 			}
@@ -224,7 +225,7 @@ var DefaultHandlers = []CommandHandler{
 			if err != nil {
 				return err
 			}
-			event_stream, err := repo_host_client.SyncLocal(ctx, &repo_state)
+			event_stream, err := repo_host_client.SyncLocal(ctx, repo_state)
 			if err != nil {
 				return err
 			}
@@ -239,7 +240,7 @@ var DefaultHandlers = []CommandHandler{
 			if err != nil {
 				return err
 			}
-			event_stream, err := repo_host_client.SyncRemote(ctx, &repo_state)
+			event_stream, err := repo_host_client.SyncRemote(ctx, repo_state)
 			if err != nil {
 				return err
 			}
@@ -265,7 +266,8 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.OnTargetList(target_list)
 		}}}
 
-func InvokeCommandline(ctx context.Context,
+func InvokeCommandline(
+	ctx context.Context,
 	client_config Config,
 	server_config Config,
 	sink OutputSink,

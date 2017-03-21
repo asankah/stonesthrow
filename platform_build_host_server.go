@@ -1,8 +1,8 @@
 package stonesthrow
 
 import (
-	"context"
 	"fmt"
+	"golang.org/x/net/context"
 	"os"
 	"os/exec"
 	"path"

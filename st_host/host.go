@@ -1,18 +1,13 @@
 package main
 
 import (
-	"context"
 	"flag"
-	"fmt"
 	"github.com/asankah/stonesthrow"
 	"log"
 	"os"
-	"os/exec"
 )
 
 func main() {
-	stonesthrow.InitializeCommands()
-
 	platform := flag.String("platform", "", "Platform to use. See code for valid platform values.")
 	repository := flag.String("repository", "", "Repository to use.")
 	configFileName := flag.String("config", stonesthrow.GetDefaultConfigFile(), "Configuration file to use.")
@@ -51,37 +46,9 @@ func main() {
 		}
 	}
 
-	server := stonesthrow.Server{}
-	reload := false
-
-	stonesthrow.InitializeHostCommands(config)
-	stonesthrow.AddHandler("reload", "Reload and rebuild the server library.",
-		func(ctx context.Context, s *stonesthrow.Session, req stonesthrow.RequestMessage, _ *flag.FlagSet) error {
-			server.Quit()
-			reload = true
-			return nil
-		}, stonesthrow.NO_REVISION)
-
-	err = server.Run(config)
+	err = stonesthrow.RunServer(config)
 	if err != nil {
 		log.Printf("Failed to start server: %s", err.Error())
 		os.Exit(1)
-	}
-
-	if reload {
-		log.Print("Launching st_reload to reload and update.")
-		cmd := exec.Command("st_reload",
-			"--pid", fmt.Sprintf("%d", os.Getpid()),
-			"--package", "github.com/asankah/stonesthrow",
-			"st_host", "--platform", config.PlatformName,
-			"--config", config.ConfigurationFile.FileName,
-			"--repository", config.RepositoryName)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err = cmd.Start()
-		if err != nil {
-			os.Exit(1)
-		}
 	}
 }

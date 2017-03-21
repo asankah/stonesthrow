@@ -202,86 +202,59 @@ func (f *ConsoleFormatter) Show(name string, templateValue string, o interface{}
 	}
 }
 
-func (f *ConsoleFormatter) Format(message interface{}) error {
-	switch t := message.(type) {
-	case *stonesthrow.InfoMessage:
-		f.Show("info",
-			`{{info "Info"}}: {{.Info}}
-`, t)
+func (f *ConsoleFormatter) OnGitRepositoryInfo(ri *stonesthrow.GitRepositoryInfo) error {
+}
 
-	case *stonesthrow.ErrorMessage:
-		f.Show("error",
-			`{{error "Error"}}: {{.Error}}
-`, t)
+func (f *ConsoleFormatter) OnTargetList(tl *stonesthrow.TargetList) error {}
 
-	case *stonesthrow.BeginCommandMessage:
+func (f *ConsoleFormatter) OnBuilderJobs(bj *stonesthrow.BuilderJobs) error {}
+
+func (f *ConsoleFormatter) OnJobEvent(je *stonesthrow.JobEvent) error {
+	switch {
+	case je.GetLogEvent() != nil:
+		switch je.GetLogEvent().GetSeverity() {
+		case stonesthrow.LogEvent_INFO:
+			f.Show("info",
+				`{{info "Info"}}: {{.}}
+`, je.GetLogEvent().GetMsg())
+
+		case stonesthrow.LogEvent_ERROR:
+			f.Show("error",
+				`{{error "Error"}}: {{.}}
+`, je.GetLogEvent().GetMsg())
+
+		}
+
+	case je.GetBeginCommandEvent() != nil:
+		e := je.GetBeginCommandEvent()
 		f.Show("bc",
-			`{{.Hostname | subject}}: {{range .Command}}{{.}} {{end}}{{if .WorkDir}} [{{.WorkDir | info}}]{{end}}
-`, t)
-		f.SetupFilterChainForCommand(t.Command)
+			`{{.Hostname | subject}}: {{range .Command.Command}}{{.}} {{end}}{{if .Command.Directory}} [{{.Command.Directory | info}}]{{end}}
+`, e)
+		f.SetupFilterChainForCommand(e.Command.Command)
 
-	case *stonesthrow.TerminalOutputMessage:
-		fmt.Println(f.ApplyFilters(t.Output))
+	case je.GetCommandOutputEvent() != nil:
+		e := je.GetCommandOutputEvent()
+		fmt.Println(f.ApplyFilters(e.GetOutput()))
 
-	case *stonesthrow.EndCommandMessage:
-		if t.ReturnCode != 0 {
+	case je.GetEndCommandEvent() != nil:
+		e := je.GetEndCommandEvent()
+		if e.ReturnCode != 0 {
 			f.Show("fail", `{{error "Failed"}}: Return code {{.ReturnCode | printf "%d" | info}}
 
-`, t)
+`, e)
 		}
 		f.ClearFilters()
-
-	case *stonesthrow.CommandListMessage:
-		f.Show("help", `{{if .Synposis}}{{.Synposis}}
-{{end}}{{if .ConfigFile}}
-  {{heading "Configuration"}}: {{.ConfigFile}}
-{{end}}
-{{if .Repositories}}  Repositories:{{range $repo, $r := .Repositories}}
-    {{title $repo}}:
-      {{heading "Path"}}    : {{$r.SourcePath}}
-      {{heading "Revision"}}: {{$r.Revistion}}
-      {{heading "Output"}}  : {{$r.BuildPath}}{{end}}
-
-{{end}}
-{{if .Commands}}  Commands:{{range $cmd, $c := .Commands}}
-    {{title $cmd}}: {{if $c.Aliases}}[{{range $c.Aliases}}{{info .}}{{end}}]{{end}}{{if $c.Usage}}
-      {{$c.Usage}}{{else}}{{$c.Synopsis}}{{end}}{{end}}
-{{end}}`, t)
-
-	case *stonesthrow.JobListMessage:
-		f.Show("jl",
-			`Running Jobs:{{range .Jobs}}
-  Command: {{title .Request.Command}} {{range .Request.Arguments}}{{.}} {{end}} #{{.Id | printf "%d" | info}}
-{{if .Request.Revision}}    On {{.Request.Repository}}@{{location .Request.Revision}}
-{{end}}    Running Since {{.StartTime}} ({{seconds .Duration | info}} seconds){{template "ps" .Processes}}{{else}}No running jobs.
-{{end}}
-{{define "ps"}}{{if .}}
-    Processes:{{range .}}
-      {{if .Running}}{{location "Running"}}{{else}}{{dark "Done"}}{{end}}: {{range .Command}}{{. | info}} {{end}}{{if .Running}}
-        Since {{.StartTime}} ({{seconds .Duration | info}} seconds)
-{{else}}
-        Ran from {{.StartTime}} to {{.EndTime}} ({{seconds .Duration | info}} seconds)
-	System time {{seconds .SystemTime | info}} seconds
-	User time {{seconds .UserTime | info}} seconds
-{{end}}{{end}}
-{{else}}
-    No Child Processes.
-{{end}}{{end}}`, t)
-
-	case *stonesthrow.ProcessListMessage:
-		f.Show("ps", `Running Child Processes:{{range .Processes}}
-  Command: {{range .Command}}{{.}} {{end}}
-    Running since {{.StartTime}} ({{seconds .Duration | info}} seconds)
-{{else}}
-No running processes.
-{{end}}
-`, t)
-
-	default:
-		fmt.Printf("Unrecognized message %#v", message)
 	}
+}
 
-	return nil
+func (f *ConsoleFormatter) OnPong(pr *stonesthrow.PingResult) error {}
+
+func (f *ConsoleFormatter) Drain(jr stonesthrow.JobEventReceiver) error {}
+
+func (f *ConsoleFormatter) DrainReader(o stonesthrow.CommandOutputEvent, r io.Reader) error {}
+
+func (f *ConsoleFormatter) Send(je *stonesthrow.JobEvent) error {
+	return OnJobEvent(je)
 }
 
 func WriteTestString() {
