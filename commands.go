@@ -25,6 +25,7 @@ type RequestHandler func(context.Context, *ClientConnection, *flag.FlagSet) erro
 
 type CommandHandler struct {
 	name       string
+	group      string
 	synopsis   string
 	usage      string
 	flagSetter FlagSetter
@@ -72,6 +73,7 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 
 var DefaultHandlers = []CommandHandler{
 	{"branch",
+		"Repository",
 		`List local branches.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
@@ -87,7 +89,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.OnGitRepositoryInfo(repo_info)
 		}},
 
-	{"build",
+	{"build", "Platform",
 		`Build specified targets.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			builder_client := NewPlatformBuildHostClient(conn.RpcConnection)
@@ -106,7 +108,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(build_client)
 		}},
 
-	{"clean",
+	{"clean", "Platform",
 		`'clean build' cleans the build directory, while 'clean source' cleans the source directory.`, "",
 		func(f *flag.FlagSet) {
 			f.Bool("out", false, "Clean the output directory.")
@@ -145,7 +147,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(output_client)
 		}},
 
-	{"ping",
+	{"ping", "Service control",
 		`Diagnostic. Responds with a pong.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			service_host_client := NewServiceHostClient(conn.RpcConnection)
@@ -156,7 +158,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.OnPong(ping_result)
 		}},
 
-	{"prepare",
+	{"prepare", "Platform",
 		`Prepare build directory. Runs 'mb gen'.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			build_host_client := NewPlatformBuildHostClient(conn.RpcConnection)
@@ -173,7 +175,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"pull",
+	{"pull", "Repository",
 		`Pull a specific branch or branches from upstream.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			if len(f.Args()) == 0 {
@@ -187,7 +189,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"push",
+	{"push", "Repository",
 		`Push local branches upstream.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			branches := f.Args()
@@ -202,7 +204,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"status",
+	{"status", "Repository",
 		`Run 'git status'.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
@@ -217,7 +219,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"sync",
+	{"sync", "Repository",
 		`Run 'gclient sync'.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
@@ -232,7 +234,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"sync_workdir",
+	{"sync_workdir", "Repository",
 		`Synchronize remote work directory with local.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
@@ -247,7 +249,22 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"quit",
+	{"ru", "Repository",
+		`Rebase-update.`, "", nil,
+		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
+			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
+			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
+			if err != nil {
+				return err
+			}
+			event_stream, err := repo_host_client.RebaseUpdate(ctx, repo_state)
+			if err != nil {
+				return err
+			}
+			return conn.Sink.Drain(event_stream)
+		}},
+
+	{"quit", "Service control",
 		`Quit server`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			service_host_client := NewServiceHostClient(conn.RpcConnection)
@@ -262,7 +279,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"list",
+	{"list", "Platform",
 		"List available targets", "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			builder_client := NewPlatformBuildHostClient(conn.RpcConnection)
@@ -308,8 +325,10 @@ func InvokeCommandline(
 	commander.Output = stdoutPipeWriter
 
 	for _, handler := range DefaultHandlers {
-		commander.Register(handler, "")
+		commander.Register(handler, handler.group)
 	}
+	commander.Register(commander.FlagsCommand(), "")
+	commander.Register(commander.HelpCommand(), "")
 
 	err := flagset.Parse(arguments)
 	if err != nil {

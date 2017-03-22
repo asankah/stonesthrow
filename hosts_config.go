@@ -12,24 +12,22 @@ type HostsConfig struct {
 }
 
 func (h *HostsConfig) Normalize() error {
-	for _, hostConfig := range h.Hosts {
+	for hostName, hostConfig := range h.Hosts {
+		if hostConfig.Name == "" {
+			hostConfig.Name = hostName
+		}
 		for _, alias := range hostConfig.Alias {
 			h.Hosts[alias] = hostConfig
 		}
 	}
 
-	for hostName, hostConfig := range h.Hosts {
-		if hostConfig.Name != "" {
-			// No need to do this again if we've normalized this HostConfig
-			continue
-		}
-
+	for _, hostConfig := range h.Hosts {
 		for remote_host, remote := range hostConfig.Remotes {
 			remote.HostName = remote_host
 			remote.Host, _ = h.Hosts[remote_host]
 		}
 
-		err := hostConfig.Normalize(hostName)
+		err := hostConfig.Normalize()
 		if err != nil {
 			return err
 		}

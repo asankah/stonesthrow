@@ -228,10 +228,6 @@ func (r *RepositoryHostServerImpl) PrepareForReceive(rs *RepositoryState, s Repo
 func (r *RepositoryHostServerImpl) RebaseUpdate(rs *RepositoryState, s RepositoryHost_RebaseUpdateServer) error {
 	_, commands := r.GetGitCommandsForJobEventSender(s)
 
-	if r.Repository.GitConfig.Remote == "" {
-		return NewNoUpstreamError("repository: %s", r.Repository.Name)
-	}
-
 	status, err := commands.GitStatus(s.Context())
 	if err != nil {
 		return err

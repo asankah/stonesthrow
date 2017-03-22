@@ -32,8 +32,7 @@ func (h *HostConfig) IsWildcard() bool {
 	return h.Name == "*"
 }
 
-func (h *HostConfig) Normalize(hostname string) error {
-	h.Name = hostname
+func (h *HostConfig) Normalize() error {
 	for repository, repositoryConfig := range h.Repositories {
 		err := repositoryConfig.Normalize(repository, h)
 		if err != nil {
