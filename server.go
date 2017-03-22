@@ -7,13 +7,12 @@ import (
 )
 
 func getCredentialsForServer(server_config Config) (credentials.TransportCredentials, error) {
-	if server_config.Host.Certificates.ServerCertFile == "" ||
-		server_config.Host.Certificates.ServerKeyFile == "" {
+	if server_config.Host.Certificates == nil || server_config.Host.Certificates.ServerCert == nil {
 		return nil, NewConfigIncompleteError("can't locate server key and certificate")
 	}
 
-	return credentials.NewServerTLSFromFile(server_config.Host.Certificates.ServerCertFile,
-		server_config.Host.Certificates.ServerKeyFile)
+	return credentials.NewServerTLSFromFile(server_config.Host.Certificates.ServerCert.CertificateFile,
+		server_config.Host.Certificates.ServerCert.KeyFile)
 }
 
 func RunServer(Config Config) error {

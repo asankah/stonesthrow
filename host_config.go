@@ -5,10 +5,14 @@ import (
 	"strings"
 )
 
+type CertificateLocator struct {
+	CertificateFile string `json:"cert,omitempty"`
+	KeyFile         string `json:"key,omitempty"`
+}
+
 type CertificateConfig struct {
-	CaCertFile     string `json:"ca,omitempty"`
-	ServerKeyFile  string `json:"key,omitempty"`
-	ServerCertFile string `json:"server,omitempty"`
+	RootCert   *CertificateLocator `json:"root,omitempty"`
+	ServerCert *CertificateLocator `json:"server,omitempty"`
 }
 
 type HostConfig struct {
@@ -22,6 +26,10 @@ type HostConfig struct {
 
 	Name              string            `json:"-"`
 	DefaultRepository *RepositoryConfig `json:"-"`
+}
+
+func (h *HostConfig) IsWildcard() bool {
+	return h.Name == "*"
 }
 
 func (h *HostConfig) Normalize(hostname string) error {

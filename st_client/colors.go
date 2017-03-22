@@ -6,6 +6,7 @@ import (
 
 var (
 	CError           = ansi.ColorFunc("1")
+	CSucceeded       = ansi.ColorFunc("40")
 	CInfo            = ansi.ColorFunc("6")
 	CDark            = ansi.ColorFunc("238")
 	CTitle           = ansi.ColorFunc("15+b")

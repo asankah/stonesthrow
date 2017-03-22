@@ -12,11 +12,11 @@ import (
 )
 
 func getCredentialsForClient(client_config Config) (credentials.TransportCredentials, error) {
-	if client_config.Host.Certificates == nil || client_config.Host.Certificates.CaCertFile == "" {
+	if client_config.Host.Certificates == nil || client_config.Host.Certificates.RootCert == nil {
 		return nil, NewConfigIncompleteError("Client does not specify a CA certificate")
 	}
 
-	return credentials.NewClientTLSFromFile(client_config.Host.Certificates.CaCertFile, "")
+	return credentials.NewClientTLSFromFile(client_config.Host.Certificates.RootCert.CertificateFile, "")
 }
 
 func connectToLocalEndpoint(ctx context.Context, client_config, server_config Config, endpoint Endpoint) (*grpc.ClientConn, error) {

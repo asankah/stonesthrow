@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/asankah/stonesthrow"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -52,13 +54,6 @@ func normalizePathSeparators(s string) string {
 	return strings.Replace(s, "\\", "/", -1)
 }
 
-func literalToRegex(s string) string {
-	s = strings.Replace(s, "\\", "\\\\", -1)
-	s = strings.Replace(s, ".", "\\.", -1)
-	s = strings.Replace(s, "+", "\\+", -1)
-	return s
-}
-
 func (f *ConsoleFormatter) DimProgress() {
 	f.AddRegExpReplace(
 		`^\[(\d*)/(\d*)\]`,
@@ -66,7 +61,7 @@ func (f *ConsoleFormatter) DimProgress() {
 }
 
 func (f *ConsoleFormatter) AddPathRemappers() {
-	re := regexp.MustCompile(literalToRegex(f.config.Repository.SourcePath) + `[\w/\\_-]*`)
+	re := regexp.MustCompile(regexp.QuoteMeta(f.config.Repository.SourcePath) + `[\w/\\_-]*`)
 	sourceLen := len(f.config.Repository.SourcePath)
 	sourcePathRewriter := func(s string) string {
 		return "/" + normalizePathSeparators(s[sourceLen:])
@@ -172,6 +167,7 @@ func (f *ConsoleFormatter) GetTemplate(name string, templateValue string) (*temp
 		"field":    CSubject,
 		"subject":  CSubject,
 		"error":    CError,
+		"success":  CSucceeded,
 		"location": CLocation,
 		"lines": func(s string) []string {
 			return strings.Split(s, "\n")
@@ -181,6 +177,9 @@ func (f *ConsoleFormatter) GetTemplate(name string, templateValue string) (*temp
 		},
 		"seconds": func(d time.Duration) string {
 			return fmt.Sprintf("%2.2f", time.Duration(d).Seconds())
+		},
+		"branch_succeeded": func(v stonesthrow.GitBranchTaskEvent_Result) bool {
+			return v == stonesthrow.GitBranchTaskEvent_SUCCEEDED
 		}})
 	_, err := t.Parse(templateValue)
 	if err != nil {
@@ -203,11 +202,40 @@ func (f *ConsoleFormatter) Show(name string, templateValue string, o interface{}
 }
 
 func (f *ConsoleFormatter) OnGitRepositoryInfo(ri *stonesthrow.GitRepositoryInfo) error {
+	f.Show("repo-info", `{{/*
+
+  Branch info:
+  */}}{{define "branch-info"  }}
+{{heading .Name}}	{{dark "@"}}{{.Revision}} {{/* 
+
+  Revisions:
+    */}}{{if .RevisionsAhead}}{{success "+"}}{{.RevisionsAhead | printf "%d" | success}}{{end}}{{/*
+*/}}{{if .RevisionsBehind}}{{error "-"}}{{.RevisionsBehind | printf "%d" | error}}{{end}}{{/*
+
+  Configuration values
+    */}}{{range $key, $value := .Config}}
+    {{field $key}}:	{{$value}}{{end}}{{end}}{{/*
+ 
+  Upstream info:
+  */}}{{define "upstream-info"}}
+{{heading .Name}}:
+    {{field "Push"}} : {{.PushUrl}}
+    {{field "Fetch"}}: {{.FetchUrl}}{{end}}{{/*
+ 
+  Main template:
+  */}}{{title "Branches"}}{{range .Branches}}{{template "branch-info" .}}{{end}}
+{{title "Upstreams"}}{{range .Upstreams}}{{template "upstream-info" .}}{{end}}
+`, ri)
+	return nil
 }
 
-func (f *ConsoleFormatter) OnTargetList(tl *stonesthrow.TargetList) error {}
+func (f *ConsoleFormatter) OnTargetList(tl *stonesthrow.TargetList) error {
+	return nil
+}
 
-func (f *ConsoleFormatter) OnBuilderJobs(bj *stonesthrow.BuilderJobs) error {}
+func (f *ConsoleFormatter) OnBuilderJobs(bj *stonesthrow.BuilderJobs) error {
+	return nil
+}
 
 func (f *ConsoleFormatter) OnJobEvent(je *stonesthrow.JobEvent) error {
 	switch {
@@ -223,13 +251,18 @@ func (f *ConsoleFormatter) OnJobEvent(je *stonesthrow.JobEvent) error {
 				`{{error "Error"}}: {{.}}
 `, je.GetLogEvent().GetMsg())
 
+		case stonesthrow.LogEvent_DEBUG:
+			f.Show("debug",
+				`{{dar "Debug"}}: {{.}}
+`, je.GetLogEvent().GetMsg())
+
 		}
 
 	case je.GetBeginCommandEvent() != nil:
 		e := je.GetBeginCommandEvent()
 		f.Show("bc",
-			`{{.Hostname | subject}}: {{range .Command.Command}}{{.}} {{end}}{{if .Command.Directory}} [{{.Command.Directory | info}}]{{end}}
-`, e)
+			`{{.Host | subject}}: {{range .Command}}{{.}} {{end}}{{if .Directory}} [{{.Directory | info}}]{{end}}
+`, e.GetCommand())
 		f.SetupFilterChainForCommand(e.Command.Command)
 
 	case je.GetCommandOutputEvent() != nil:
@@ -244,17 +277,44 @@ func (f *ConsoleFormatter) OnJobEvent(je *stonesthrow.JobEvent) error {
 `, e)
 		}
 		f.ClearFilters()
+
+	case je.GetBranchTaskEvent() != nil:
+		e := je.GetBranchTaskEvent()
+		f.Show("branch-task", `[{{title .Branch}}] {{if .Result | branch_succeed}}{{success "OK}}{{else}}{{error "FAILED"}}{{end}} {{info .Revision}} ({{.Reason}})
+`, e)
+	}
+	return nil
+}
+
+func (f *ConsoleFormatter) OnPong(pr *stonesthrow.PingResult) error {
+	f.Show("pong", `{{info "Pong"}}: {{.Pong}}
+`, pr)
+	return nil
+}
+
+func (f *ConsoleFormatter) Drain(jr stonesthrow.JobEventReceiver) error {
+	for {
+		je, err := jr.Recv()
+		if err != nil {
+			return err
+		}
+
+		f.OnJobEvent(je)
 	}
 }
 
-func (f *ConsoleFormatter) OnPong(pr *stonesthrow.PingResult) error {}
-
-func (f *ConsoleFormatter) Drain(jr stonesthrow.JobEventReceiver) error {}
-
-func (f *ConsoleFormatter) DrainReader(o stonesthrow.CommandOutputEvent, r io.Reader) error {}
+func (f *ConsoleFormatter) DrainReader(o stonesthrow.CommandOutputEvent, r io.Reader) error {
+	scanner := bufio.NewScanner(r)
+	je := stonesthrow.JobEvent{CommandOutputEvent: &o}
+	for scanner.Scan() {
+		o.Output = scanner.Text()
+		f.OnJobEvent(&je)
+	}
+	return nil
+}
 
 func (f *ConsoleFormatter) Send(je *stonesthrow.JobEvent) error {
-	return OnJobEvent(je)
+	return f.OnJobEvent(je)
 }
 
 func WriteTestString() {

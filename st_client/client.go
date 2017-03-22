@@ -81,32 +81,5 @@ func main() {
 	}
 
 	formatter := ConsoleFormatter{config: &serverConfig, porcelain: *porcelain}
-	done := make(chan int)
-	output := make(chan interface{})
-	go func() {
-		for message := range output {
-			formatter.Format(message)
-		}
-		done <- 0
-	}()
-
-	executor := stonesthrow.NewChannelExecutorFromMessageHandler(output, clientConfig.Host.Name)
-	var req stonesthrow.RequestMessage
-	req.Command = arguments[0]
-	req.Arguments = arguments[1:]
-	req.Repository = *repository
-	req.SourceHostname = clientConfig.Host.Name
-	if serverConfig.Host != clientConfig.Host && stonesthrow.CommandNeedsRevision(req.Command) {
-		req.Revision, err = stonesthrow.RepositoryCommands{clientConfig.Repository, executor}.GitCreateBuilderHead(
-			context.Background())
-		if err != nil {
-			log.Fatal(err.Error())
-		}
-	}
-
-	err = stonesthrow.SendRequestToRemoteServer(executor, clientConfig, serverConfig, req, output)
-	if err != nil {
-		log.Fatalf("Client failed: %#v", err)
-	}
-	<-done
+	stonesthrow.InvokeCommandline(context.Background(), clientConfig, serverConfig, &formatter, rpc_connection, arguments...)
 }

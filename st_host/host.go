@@ -13,11 +13,9 @@ func main() {
 	configFileName := flag.String("config", stonesthrow.GetDefaultConfigFile(), "Configuration file to use.")
 	flag.Parse()
 
-	if *platform == "" {
-		log.Fatal("Need to specify the platform")
-	}
-	if *configFileName == "" {
-		log.Fatal("Need a configuration file")
+	if *platform == "" || *configFileName == "" {
+		flag.Usage()
+		return
 	}
 
 	var configFile stonesthrow.ConfigurationFile

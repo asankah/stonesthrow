@@ -57,6 +57,21 @@ func (h *HostsConfig) Normalize() error {
 		}
 	}
 
+	global_host, ok := h.Hosts["*"]
+	if ok && global_host.Repositories != nil {
+		// We have a wildcard host entry. Force-inherit specific properties into all named hosts.
+		for _, hostConfig := range h.Hosts {
+			for _, repo := range hostConfig.Repositories {
+				template_repo, ok := global_host.Repositories[repo.Name]
+				if !ok {
+					continue
+				}
+
+				repo.GitConfig.SyncableProperties = template_repo.GitConfig.SyncableProperties
+			}
+		}
+	}
+
 	return h.Validate()
 }
 

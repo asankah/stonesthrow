@@ -36,9 +36,12 @@ func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, rs *Repo
 
 	configLines := strings.Split(allPropertiesString, "\x00")
 	for _, configLine := range configLines {
+		if len(configLine) == 0 {
+			continue
+		}
 		fields := strings.Split(configLine, "\n")
 		if len(fields) != 2 {
-			continue
+			return nil, fmt.Errorf("Unexpected config format. Config line is : %s (%d)", configLine, len(configLine))
 		}
 
 		name := fields[0]
@@ -46,7 +49,7 @@ func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, rs *Repo
 
 		name_components := strings.Split(name, ".")
 		if len(name_components) != 3 {
-			continue
+			return nil, fmt.Errorf("Unexpected config format. Config line is : %s (%d)", configLine, len(configLine))
 		}
 
 		if name_components[0] != "branch" {
@@ -77,21 +80,24 @@ func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, rs *Repo
 
 		upstream, ok := c.Config["base-upstream"]
 		if !ok {
+			fmt.Printf("No upstream for %s\n", c.Name)
 			continue
 		}
-		counts_string, err := commands.ExecuteNoStream(ctx, "git", "rev-list", "--left-right", "--count",
-			fmt.Sprintf("{}..{}", c.Name, upstream))
+		counts_string, err := commands.Execute(ctx, "git", "rev-list", "--left-right", "--count",
+			fmt.Sprintf("%s...%s", c.Name, upstream))
 		if err != nil {
+			fmt.Printf("Failed to execute git-rev-list [%s]\n", counts_string)
 			continue
 		}
+		fmt.Printf("%s:%s -> %s\n", c.Name, upstream, counts_string)
 		counts_fields := strings.Split(counts_string, "\t")
 		if len(counts_fields) != 2 {
-			continue
+			return nil, fmt.Errorf("Unexpected format for 'git rev-list --count --left-right': [%s]", counts_string)
 		}
 		converted, _ := strconv.ParseInt(counts_fields[0], 10, 32)
-		c.RevisionsBehind = int32(converted)
-		converted, _ = strconv.ParseInt(counts_fields[1], 10, 32)
 		c.RevisionsAhead = int32(converted)
+		converted, _ = strconv.ParseInt(counts_fields[1], 10, 32)
+		c.RevisionsBehind = int32(converted)
 	}
 
 	ri := &GitRepositoryInfo{}

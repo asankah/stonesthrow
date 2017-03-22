@@ -42,7 +42,7 @@ func (r *RepositoryConfig) Validate() error {
 		return fmt.Errorf("RepositoryConfig not normalized")
 	}
 
-	if r.SourcePath == "" {
+	if r.SourcePath == "" && !r.Host.IsWildcard() {
 		return fmt.Errorf("SourcePath invalid for %s in %s", r.Name, r.Host.Name)
 	}
 

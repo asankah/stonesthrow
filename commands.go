@@ -60,7 +60,7 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 	if IsInvalidArgumentError(err) {
 		return subcommands.ExitUsageError
 	}
-	if err != nil {
+	if err != nil && err != io.EOF {
 		conn.Sink.OnJobEvent(&JobEvent{
 			LogEvent: &LogEvent{
 				Severity: LogEvent_ERROR,
@@ -241,6 +241,21 @@ var DefaultHandlers = []CommandHandler{
 				return err
 			}
 			event_stream, err := repo_host_client.SyncRemote(ctx, repo_state)
+			if err != nil {
+				return err
+			}
+			return conn.Sink.Drain(event_stream)
+		}},
+
+	{"quit",
+		`Quit server`, "", nil,
+		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
+			service_host_client := NewServiceHostClient(conn.RpcConnection)
+			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
+			if err != nil {
+				return err
+			}
+			event_stream, err := service_host_client.Shutdown(ctx, repo_state)
 			if err != nil {
 				return err
 			}
