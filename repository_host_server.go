@@ -278,6 +278,14 @@ func GetRepositoryState(ctx context.Context, r *RepositoryConfig, e Executor, cr
 	commands := RepositoryCommands{Repository: r, Executor: e}
 	if create_builder_head {
 		revision, err = commands.GitCreateBuilderHead(ctx)
+		if err == nil {
+			err = commands.GitPushBuilderHead(ctx)
+
+			// If there is no upstream, then there's no need to push the BUILDER_HEAD anyway.
+			if IsNoUpstreamError(err) {
+				err = nil
+			}
+		}
 	} else {
 		revision, err = commands.GitRevision(ctx, "HEAD")
 	}

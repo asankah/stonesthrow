@@ -38,7 +38,7 @@ func (p *PlatformBuildHostServerImpl) EnsureGomaIfNecessary(ctx context.Context,
 	if runtime.GOOS == "windows" {
 		attemptedToStartGoma := false
 		for i := 0; i < 5; i += 1 {
-			output, err := e.ExecuteInWorkDirNoStream(p.Config.Host.GomaPath, ctx, "goma_ctl.bat", "status")
+			output, err := e.ExecuteInWorkDirNoStream(p.Config.Host.GomaPath, ctx, "cmd", "/c", "goma_ctl.bat", "status")
 			if err != nil {
 				return err
 			}
