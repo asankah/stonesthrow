@@ -80,16 +80,13 @@ func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, rs *Repo
 
 		upstream, ok := c.Config["base-upstream"]
 		if !ok {
-			fmt.Printf("No upstream for %s\n", c.Name)
 			continue
 		}
 		counts_string, err := commands.Execute(ctx, "git", "rev-list", "--left-right", "--count",
 			fmt.Sprintf("%s...%s", c.Name, upstream))
 		if err != nil {
-			fmt.Printf("Failed to execute git-rev-list [%s]\n", counts_string)
 			continue
 		}
-		fmt.Printf("%s:%s -> %s\n", c.Name, upstream, counts_string)
 		counts_fields := strings.Split(counts_string, "\t")
 		if len(counts_fields) != 2 {
 			return nil, fmt.Errorf("Unexpected format for 'git rev-list --count --left-right': [%s]", counts_string)
