@@ -9,6 +9,7 @@ import (
 )
 
 type RepositoryHostServerImpl struct {
+	Config       Config
 	Repository   *RepositoryConfig
 	ProcessAdder ProcessAdder
 }
@@ -165,13 +166,50 @@ func (r *RepositoryHostServerImpl) SetBranchConfig(info *GitRepositoryInfo, s Re
 }
 
 func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s RepositoryHost_PullFromUpstreamServer) error {
-	_, commands := r.GetGitCommandsForJobEventSender(s)
+	e, commands := r.GetGitCommandsForJobEventSender(s)
 
-	if len(list.GetBranch()) == 0 {
-		return NewInvalidArgumentError("No branches")
+	err := commands.GitFetch(s.Context(), list.GetBranch())
+	if err != nil {
+		return err
 	}
 
-	return commands.GitFetch(s.Context(), list.GetBranch())
+	if r.Repository.GitConfig.RemoteHost == nil {
+		return nil
+	}
+
+	repo_state, err := GetRepositoryState(s.Context(), r.Repository, e, false)
+	if err != nil {
+		return err
+	}
+
+	var remote_config Config
+	remote_config.SelectPeerConfig(r.Config.ConfigurationFile, r.Repository.GitConfig.RemoteHost.Name, r.Repository.Name)
+	rpc_connection, err := ConnectTo(s.Context(), r.Config, remote_config)
+	if err != nil {
+		return err
+	}
+	remote_repo_client := NewRepositoryHostClient(rpc_connection)
+	remote_repo_info, err := remote_repo_client.GetBranchConfig(s.Context(), repo_state)
+	if err != nil {
+		return err
+	}
+	rpc_connection.Close()
+
+	if len(list.GetBranch()) != 0 {
+		filtered_branches := []*GitRepositoryInfo_Branch{}
+		allowed_branch_set := make(map[string]bool)
+		for _, branch := range list.GetBranch() {
+			allowed_branch_set[branch] = true
+		}
+		for _, branch := range remote_repo_info.GetBranches() {
+			if _, ok := allowed_branch_set[branch.GetName()]; ok {
+				filtered_branches = append(filtered_branches, branch)
+			}
+		}
+		remote_repo_info.Branches = filtered_branches
+	}
+
+	return r.SetBranchConfig(remote_repo_info, s)
 }
 
 func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s RepositoryHost_PushToUpstreamServer) error {
@@ -267,6 +305,8 @@ func (r *RepositoryHostServerImpl) RebaseUpdate(rs *RepositoryState, s Repositor
 	err = commands.ExecutePassthrough(s.Context(), "git", "rebase-update", "--no-fetch", "--keep-going")
 	if previousHead != "" {
 		commands.ExecutePassthrough(s.Context(), "git", "checkout", previousHead)
+	} else {
+		commands.ExecutePassthrough(s.Context(), "git", "checkout", "origin/master")
 	}
 
 	return err

@@ -139,6 +139,9 @@ func (r RepositoryCommands) branchListToRefspec(ctx context.Context, branches []
 		if branch == "" {
 			continue
 		}
+		if branch == "*" {
+			branch = "refs/heads/*"
+		}
 		refspecs = append(refspecs, fmt.Sprintf("+%s:%s", branch, branch))
 	}
 	return refspecs
@@ -192,11 +195,11 @@ func (r RepositoryCommands) GitPush(ctx context.Context, branches []string) erro
 }
 
 func (r RepositoryCommands) GitFetch(ctx context.Context, branches []string) error {
-	if len(branches) == 0 {
-		return NewInvalidArgumentError("No branches specified for 'git fetch'")
-	}
 	if r.Repository.GitConfig.Remote == "" {
 		return NewNoUpstreamError("No upstream configured for repository at %s", r.Repository.SourcePath)
+	}
+	if branches == nil || len(branches) == 0 {
+		branches = []string{"*"}
 	}
 	command := []string{"git", "fetch", r.Repository.GitConfig.Remote}
 	command = append(command, r.branchListToRefspec(ctx, append(branches, "refs/remotes/origin/master"))...)

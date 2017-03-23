@@ -50,7 +50,7 @@ func connectViaSsh(ctx context.Context, client_config, server_config Config, rem
 	cmd.Stderr = os.Stderr
 	cmd.Start()
 
-	return grpc.DialContext(ctx, server_config.Host.Name,
+	return grpc.DialContext(ctx, server_config.Host.Name+":"+server_config.Platform.Name,
 		grpc.WithAuthority(server_config.Host.Name),
 		grpc.WithTransportCredentials(creds),
 		grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {

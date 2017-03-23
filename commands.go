@@ -265,9 +265,6 @@ var DefaultHandlers = []CommandHandler{
 	{"pull", "repository management",
 		`pull a specific branch or branches from upstream.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			if len(f.Args()) == 0 {
-				return NewInvalidArgumentError("No branch specified")
-			}
 			rpc_connection, err := conn.GetConnection(ctx)
 			if err != nil {
 				return err
