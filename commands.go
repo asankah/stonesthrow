@@ -18,47 +18,47 @@ type ClientConnection struct {
 	Sink         OutputSink
 	Executor     Executor
 
-	rpcConnection *grpc.ClientConn
+	platform        string
+	repository      string
+	config_filename string
+	rpcConnection   *grpc.ClientConn
 }
 
 func (c ClientConnection) IsRemote() bool {
 	return c.ClientConfig.Host != c.ServerConfig.Host
 }
 
-func (c *ClientConnection) InitFromFlags(ctx context.Context, f *flag.FlagSet) error {
-	var repository string
-	var server_platform string
-	var config_filename string
+func (c *ClientConnection) SetupTopLevelFlags(f *flag.FlagSet) {
+	default_server_platform := path.Base(os.Args[0])
+	default_config_file := GetDefaultConfigFile()
 
-	server_platform_flag := f.Lookup("platform")
-	if server_platform_flag == nil {
+	f.StringVar(&c.platform, "platform", default_server_platform, "Server platform.")
+	f.StringVar(&c.repository, "repository", "", "Repository")
+	f.StringVar(&c.config_filename, "config", default_config_file, "Configuration file")
+}
+
+func (c *ClientConnection) InitFromFlags(ctx context.Context, f *flag.FlagSet) error {
+	if c.platform == "" {
 		return fmt.Errorf("platform flag is required")
 	}
-	server_platform = server_platform_flag.Value.String()
 
-	if repository_flag := f.Lookup("respository"); repository_flag != nil {
-		repository = repository_flag.Value.String()
-	}
-
-	config_flag := f.Lookup("config")
-	if config_flag == nil {
+	if c.config_filename == "" {
 		return fmt.Errorf("config flag is required")
 	}
-	config_filename = config_flag.Value.String()
 
 	var config_file ConfigurationFile
 	var client_config, server_config Config
-	err := config_file.ReadFrom(config_filename)
+	err := config_file.ReadFrom(c.config_filename)
 	if err != nil {
 		return err
 	}
 
-	err = server_config.SelectLocalServerConfig(&config_file, server_platform, repository)
+	err = server_config.SelectLocalServerConfig(&config_file, c.platform, c.repository)
 	if err != nil {
 		return err
 	}
 
-	err = client_config.SelectLocalClientConfig(&config_file, server_platform, repository)
+	err = client_config.SelectLocalClientConfig(&config_file, c.platform, c.repository)
 	if err != nil {
 		return err
 	}
@@ -423,18 +423,10 @@ var DefaultHandlers = []CommandHandler{
 			return RunPassthroughClient(conn.ClientConfig, conn.ServerConfig)
 		}}}
 
-func SetupTopLevelFlags(f *flag.FlagSet) {
-	default_server_platform := path.Base(os.Args[0])
-	default_config_file := GetDefaultConfigFile()
-
-	f.String("platform", default_server_platform, "Server platform.")
-	f.String("repository", "", "Repository")
-	f.String("config", default_config_file, "Configuration file")
-}
-
 func InvokeCommandline(ctx context.Context, sinkerator func(Config) OutputSink) error {
 	flagset := flag.NewFlagSet("", flag.ContinueOnError)
-	SetupTopLevelFlags(flagset)
+	conn := &ClientConnection{Sinkerator: sinkerator}
+	conn.SetupTopLevelFlags(flagset)
 
 	commander := subcommands.NewCommander(flagset, os.Args[0])
 	for _, handler := range DefaultHandlers {
@@ -448,7 +440,6 @@ func InvokeCommandline(ctx context.Context, sinkerator func(Config) OutputSink) 
 		return NewInvalidArgumentError("invalid commandline arguments: %#v", os.Args)
 	}
 
-	conn := &ClientConnection{Sinkerator: sinkerator}
 	commander.Execute(ctx, conn)
 	return nil
 }
