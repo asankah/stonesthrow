@@ -3,7 +3,6 @@ package stonesthrow
 import (
 	"fmt"
 	"golang.org/x/net/context"
-	"os"
 	"os/exec"
 	"path"
 	"runtime"
@@ -39,6 +38,20 @@ func (p *PlatformBuildHostServerImpl) IsGomaRunning(ctx context.Context, e Execu
 		}
 	}
 	return false
+}
+
+func (p *PlatformBuildHostServerImpl) InvokeMbTool(ctx context.Context, e Executor, mb_command ...string) error {
+	var mb_tool string
+	if runtime.GOOS == "windows" {
+		mb_tool = p.Config.GetSourcePath("tools", "mb", "mb.bat")
+	} else {
+		mb_tool = p.Config.GetSourcePath("tools", "mb", "mb.py")
+	}
+
+	command_line := append([]string{}, mb_tool, mb_command[0],
+		"-c", p.Config.Platform.MbConfigName, "-g", p.Config.Host.GomaPath, p.Config.GetBuildPath())
+	command_line = append(command_line, mb_command[1:]...)
+	return e.ExecuteInWorkDirPassthrough(p.Config.GetSourcePath(), ctx, command_line...)
 }
 
 func (p *PlatformBuildHostServerImpl) EnsureGomaIfNecessary(ctx context.Context, e Executor) error {
@@ -89,13 +102,6 @@ func (p *PlatformBuildHostServerImpl) Build(bo *BuildOptions, s PlatformBuildHos
 		return err
 	}
 
-	for _, target := range bo.GetTargets() {
-		if strings.HasSuffix(target, "_run") {
-			isolated_filename := p.Config.Platform.RelativePath(target[:len(target)-4] + ".isolated")
-			os.Remove(isolated_filename)
-		}
-	}
-
 	err = p.GetRepositoryHostServer().SyncRemote(bo.GetRepositoryState(), s)
 	if err != nil {
 		return err
@@ -122,7 +128,8 @@ func (p *PlatformBuildHostServerImpl) Clean(bo *BuildOptions, s PlatformBuildHos
 }
 
 func (p *PlatformBuildHostServerImpl) Prepare(bo *BuildOptions, s PlatformBuildHost_PrepareServer) error {
-	return NewNothingToDoError("not implemented")
+	e := p.GetExecutor(s)
+	return p.InvokeMbTool(s.Context(), e, "gen")
 }
 
 func (p *PlatformBuildHostServerImpl) ListTargets(ctx context.Context, bo *BuildOptions) (*TargetList, error) {
