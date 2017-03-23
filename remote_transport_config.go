@@ -36,7 +36,7 @@ func (r *RemoteTransportConfig) GetCommand(server *Config) []string {
 
 	return append(command, "-T",
 		fmt.Sprintf("%s/%s", r.Host.StonesthrowPath, "st_client"),
-		"--server", server.PlatformName,
+		"--platform", server.PlatformName,
 		"--repository", server.RepositoryName,
-		"--passthrough")
+		"passthrough")
 }

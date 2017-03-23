@@ -3,21 +3,83 @@ package stonesthrow
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/google/subcommands"
 	"google.golang.org/grpc"
 	"io"
+	"os"
+	"path"
 )
 
 type ClientConnection struct {
-	ClientConfig  Config
-	ServerConfig  Config
-	RpcConnection *grpc.ClientConn
-	Sink          OutputSink
-	Executor      Executor
+	ClientConfig Config
+	ServerConfig Config
+	Sinkerator   func(Config) OutputSink
+	Sink         OutputSink
+	Executor     Executor
+
+	rpcConnection *grpc.ClientConn
 }
 
 func (c ClientConnection) IsRemote() bool {
 	return c.ClientConfig.Host != c.ServerConfig.Host
+}
+
+func (c *ClientConnection) InitFromFlags(ctx context.Context, f *flag.FlagSet) error {
+	var repository string
+	var server_platform string
+	var config_filename string
+
+	server_platform_flag := f.Lookup("platform")
+	if server_platform_flag == nil {
+		return fmt.Errorf("platform flag is required")
+	}
+	server_platform = server_platform_flag.Value.String()
+
+	if repository_flag := f.Lookup("respository"); repository_flag != nil {
+		repository = repository_flag.Value.String()
+	}
+
+	config_flag := f.Lookup("config")
+	if config_flag == nil {
+		return fmt.Errorf("config flag is required")
+	}
+	config_filename = config_flag.Value.String()
+
+	var config_file ConfigurationFile
+	var client_config, server_config Config
+	err := config_file.ReadFrom(config_filename)
+	if err != nil {
+		return err
+	}
+
+	err = server_config.SelectLocalServerConfig(&config_file, server_platform, repository)
+	if err != nil {
+		return err
+	}
+
+	err = client_config.SelectLocalClientConfig(&config_file, server_platform, repository)
+	if err != nil {
+		return err
+	}
+
+	c.ClientConfig = client_config
+	c.ServerConfig = server_config
+	c.Sink = c.Sinkerator(server_config)
+	c.Executor = NewJobEventExecutor(client_config.Host.Name, client_config.GetSourcePath(), nil, c.Sink)
+	return nil
+}
+
+func (c *ClientConnection) GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
+	if c.rpcConnection != nil {
+		return c.rpcConnection, nil
+	}
+	rpc_connection, err := ConnectTo(ctx, c.ClientConfig, c.ServerConfig)
+	if err != nil {
+		return nil, fmt.Errorf("can't connect to remote %s : %s", c.ServerConfig.Host.Name, err.Error())
+	}
+	c.rpcConnection = rpc_connection
+	return rpc_connection, nil
 }
 
 type FlagSetter func(*flag.FlagSet)
@@ -56,8 +118,13 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 	}
 
 	conn := args[0].(*ClientConnection)
+	err := conn.InitFromFlags(ctx, f)
+	if err != nil {
+		fmt.Printf(err.Error())
+		return subcommands.ExitUsageError
+	}
 
-	err := h.handler(ctx, conn, f)
+	err = h.handler(ctx, conn, f)
 	if IsInvalidArgumentError(err) {
 		return subcommands.ExitUsageError
 	}
@@ -73,10 +140,14 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 
 var DefaultHandlers = []CommandHandler{
 	{"branch",
-		"Repository",
-		`List local branches.`, "", nil,
+		"repository management",
+		`list local branches.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			repo_host_client := NewRepositoryHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
 			if err != nil {
 				return err
@@ -89,10 +160,14 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.OnGitRepositoryInfo(repo_info)
 		}},
 
-	{"build", "Platform",
-		`Build specified targets.`, "", nil,
+	{"build", "builder",
+		`build specified targets.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			builder_client := NewPlatformBuildHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			builder_client := NewPlatformBuildHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, conn.IsRemote())
 			if err != nil {
 				return err
@@ -108,7 +183,7 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(build_client)
 		}},
 
-	{"clean", "Platform",
+	{"clean", "builder",
 		`'clean build' cleans the build directory, while 'clean source' cleans the source directory.`, "",
 		func(f *flag.FlagSet) {
 			f.Bool("out", false, "Clean the output directory.")
@@ -120,7 +195,11 @@ var DefaultHandlers = []CommandHandler{
 			outValue := f.Lookup("out")
 			forceValue := f.Lookup("force")
 
-			builder_client := NewPlatformBuildHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			builder_client := NewPlatformBuildHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
 			if err != nil {
 				return err
@@ -147,10 +226,14 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(output_client)
 		}},
 
-	{"ping", "Service control",
+	{"ping", "service control",
 		`Diagnostic. Responds with a pong.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			service_host_client := NewServiceHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			service_host_client := NewServiceHostClient(rpc_connection)
 			ping_result, err := service_host_client.Ping(ctx, &PingOptions{Ping: "Ping!"})
 			if err != nil {
 				return err
@@ -158,10 +241,14 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.OnPong(ping_result)
 		}},
 
-	{"prepare", "Platform",
-		`Prepare build directory. Runs 'mb gen'.`, "", nil,
+	{"prepare", "builder",
+		`prepare build directory. Runs 'mb gen'.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			build_host_client := NewPlatformBuildHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			build_host_client := NewPlatformBuildHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
 			if err != nil {
 				return err
@@ -175,13 +262,17 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"pull", "Repository",
-		`Pull a specific branch or branches from upstream.`, "", nil,
+	{"pull", "repository management",
+		`pull a specific branch or branches from upstream.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			if len(f.Args()) == 0 {
 				return NewInvalidArgumentError("No branch specified")
 			}
-			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			repo_host_client := NewRepositoryHostClient(rpc_connection)
 			event_stream, err := repo_host_client.PullFromUpstream(ctx, &BranchList{Branch: f.Args()})
 			if err != nil {
 				return err
@@ -189,14 +280,18 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"push", "Repository",
-		`Push local branches upstream.`, "", nil,
+	{"push", "repository management",
+		`push local branches upstream.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			branches := f.Args()
 			if len(branches) == 0 {
 				branches = []string{"HEAD"}
 			}
-			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			repo_host_client := NewRepositoryHostClient(rpc_connection)
 			event_stream, err := repo_host_client.PushToUpstream(ctx, &BranchList{Branch: branches})
 			if err != nil {
 				return err
@@ -204,10 +299,14 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"status", "Repository",
-		`Run 'git status'.`, "", nil,
+	{"status", "repository management",
+		`run 'git status'.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			repo_host_client := NewRepositoryHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
 			if err != nil {
 				return err
@@ -219,10 +318,14 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"sync", "Repository",
-		`Run 'gclient sync'.`, "", nil,
+	{"sync", "repository management",
+		`run 'gclient sync'.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			repo_host_client := NewRepositoryHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
 			if err != nil {
 				return err
@@ -234,10 +337,14 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"sync_workdir", "Repository",
-		`Synchronize remote work directory with local.`, "", nil,
+	{"sync_workdir", "repository management",
+		`synchronize remote work directory with local.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			repo_host_client := NewRepositoryHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, conn.IsRemote())
 			if err != nil {
 				return err
@@ -249,10 +356,14 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"ru", "Repository",
-		`Rebase-update.`, "", nil,
+	{"ru", "repository management",
+		`rebase-update.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			repo_host_client := NewRepositoryHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			repo_host_client := NewRepositoryHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
 			if err != nil {
 				return err
@@ -264,10 +375,14 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"quit", "Service control",
-		`Quit server`, "", nil,
+	{"quit", "service control",
+		`quit server`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			service_host_client := NewServiceHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			service_host_client := NewServiceHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
 			if err != nil {
 				return err
@@ -279,10 +394,14 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"list", "Platform",
-		"List available targets", "", nil,
+	{"list", "builder",
+		"list available targets", "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			builder_client := NewPlatformBuildHostClient(conn.RpcConnection)
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			builder_client := NewPlatformBuildHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
 			if err != nil {
 				return err
@@ -296,58 +415,40 @@ var DefaultHandlers = []CommandHandler{
 				return err
 			}
 			return conn.Sink.OnTargetList(target_list)
+		}},
+
+	{"passthrough", "service control",
+		"run passthrough client.", "Only used internally", nil,
+		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
+			return RunPassthroughClient(conn.ClientConfig, conn.ServerConfig)
 		}}}
 
-func InvokeCommandline(
-	ctx context.Context,
-	client_config Config,
-	server_config Config,
-	sink OutputSink,
-	rpc_connection *grpc.ClientConn,
-	arguments ...string) error {
+func SetupTopLevelFlags(f *flag.FlagSet) {
+	default_server_platform := path.Base(os.Args[0])
+	default_config_file := GetDefaultConfigFile()
+
+	f.String("platform", default_server_platform, "Server platform.")
+	f.String("repository", "", "Repository")
+	f.String("config", default_config_file, "Configuration file")
+}
+
+func InvokeCommandline(ctx context.Context, sinkerator func(Config) OutputSink) error {
 	flagset := flag.NewFlagSet("", flag.ContinueOnError)
+	SetupTopLevelFlags(flagset)
 
-	stdoutPipeReader, stdoutPipeWriter := io.Pipe()
-	stderrPipeReader, stderrPipeWriter := io.Pipe()
-	quitter := make(chan error)
-
-	go func() {
-		sink.DrainReader(CommandOutputEvent{Stream: CommandOutputEvent_OUT}, stdoutPipeReader)
-		quitter <- nil
-	}()
-	go func() {
-		sink.DrainReader(CommandOutputEvent{Stream: CommandOutputEvent_ERR}, stderrPipeReader)
-		quitter <- nil
-	}()
-
-	commander := subcommands.NewCommander(flagset, "st_client")
-	commander.Error = stderrPipeWriter
-	commander.Output = stdoutPipeWriter
-
+	commander := subcommands.NewCommander(flagset, os.Args[0])
 	for _, handler := range DefaultHandlers {
 		commander.Register(handler, handler.group)
 	}
-	commander.Register(commander.FlagsCommand(), "")
-	commander.Register(commander.HelpCommand(), "")
+	commander.Register(commander.FlagsCommand(), "help and information")
+	commander.Register(commander.HelpCommand(), "help and information")
 
-	err := flagset.Parse(arguments)
+	err := flagset.Parse(os.Args[1:])
 	if err != nil {
-		return NewInvalidArgumentError("invalid commandline arguments: %#v", arguments)
+		return NewInvalidArgumentError("invalid commandline arguments: %#v", os.Args)
 	}
 
-	conn := &ClientConnection{
-		ClientConfig:  client_config,
-		ServerConfig:  server_config,
-		Sink:          sink,
-		RpcConnection: rpc_connection,
-		Executor:      NewJobEventExecutor(client_config.Host.Name, client_config.GetSourcePath(), nil, sink)}
+	conn := &ClientConnection{Sinkerator: sinkerator}
 	commander.Execute(ctx, conn)
-
-	stdoutPipeReader.Close()
-	stdoutPipeWriter.Close()
-	stderrPipeReader.Close()
-	stderrPipeWriter.Close()
-	<-quitter
-	<-quitter
 	return nil
 }
