@@ -62,6 +62,9 @@ func (p *PlatformBuildHostServerImpl) EnsureGomaIfNecessary(ctx context.Context,
 		}
 		return NewTimedOutError("Couldn't start compiler proxy.")
 	} else {
+		if p.IsGomaRunning(ctx, e, "python", "goma_ctl.py", "status") {
+			return nil
+		}
 		return e.ExecuteInWorkDirPassthrough(p.Config.Host.GomaPath, ctx, "python", "goma_ctl.py", "ensure_start")
 	}
 }
