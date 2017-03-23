@@ -180,6 +180,9 @@ func (f *ConsoleFormatter) GetTemplate(name string, templateValue string) (*temp
 		},
 		"branch_succeeded": func(v stonesthrow.GitBranchTaskEvent_Result) bool {
 			return v == stonesthrow.GitBranchTaskEvent_SUCCEEDED
+		},
+		"shorthost": func(h string) string {
+			return f.config.Host.HostsConfig.ShortHost(h)
 		}})
 	_, err := t.Parse(templateValue)
 	if err != nil {
@@ -243,25 +246,25 @@ func (f *ConsoleFormatter) OnJobEvent(je *stonesthrow.JobEvent) error {
 		switch je.GetLogEvent().GetSeverity() {
 		case stonesthrow.LogEvent_INFO:
 			f.Show("info",
-				`{{info "Info"}}: {{.}}
-`, je.GetLogEvent().GetMsg())
+				`{{.Host | shorthost | subject}}:{{info "Info"}}: {{.Msg}}
+`, je.GetLogEvent())
 
 		case stonesthrow.LogEvent_ERROR:
 			f.Show("error",
-				`{{error "Error"}}: {{.}}
-`, je.GetLogEvent().GetMsg())
+				`{{.Host | shorthost | subject}}:{{error "Error"}}: {{.Msg}}
+`, je.GetLogEvent())
 
 		case stonesthrow.LogEvent_DEBUG:
 			f.Show("debug",
-				`{{dar "Debug"}}: {{.}}
-`, je.GetLogEvent().GetMsg())
+				`{{.Host | shorthost | subject}}:{{dark "Debug"}}: {{.Msg}}
+`, je.GetLogEvent())
 
 		}
 
 	case je.GetBeginCommandEvent() != nil:
 		e := je.GetBeginCommandEvent()
 		f.Show("bc",
-			`{{.Host | subject}}: {{range .Command}}{{.}} {{end}}{{if .Directory}} [{{.Directory | info}}]{{end}}
+			`{{.Host | shorthost | subject}}: {{range .Command}}{{.}} {{end}}{{if .Directory}} [{{.Directory | info}}]{{end}}
 `, e.GetCommand())
 		f.SetupFilterChainForCommand(e.Command.Command)
 

@@ -26,18 +26,25 @@ type PlatformConfig struct {
 }
 
 func (p *PlatformConfig) Normalize(name string, repo *RepositoryConfig) error {
+	hosts := repo.Host.HostsConfig
 	p.Name = name
 	p.Repository = repo
 	p.BuildPath = filepath.Join(repo.SourcePath, p.RelativeBuildPath)
 	p.Endpoints = make(map[string]Endpoint)
-	for host, epString := range p.EndpointStrings {
-		components := strings.Split(epString, ",")
+	for host, ep_string := range p.EndpointStrings {
+		components := strings.Split(ep_string, ",")
 		if len(components) == 2 {
-			p.Endpoints[host] = Endpoint{Network: components[0],
+			p.Endpoints[host] = Endpoint{
+				Network:  components[0],
 				Address:  components[1],
-				HostName: host}
+				HostName: host,
+				Host:     hosts.HostByName(host)}
+			if p.Endpoints[host].Host == nil {
+				return fmt.Errorf("%s -> %s -> %s: Endpoint host %s can't be resolved",
+					repo.Host.Name, repo.Name, p.Name, host)
+			}
 		} else {
-			return fmt.Errorf("Address \"%s\" was invalid. Should be of the form <network>,<address>", epString)
+			return fmt.Errorf("Address \"%s\" was invalid. Should be of the form <network>,<address>", ep_string)
 		}
 	}
 	return p.Validate()

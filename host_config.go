@@ -26,19 +26,31 @@ type HostConfig struct {
 
 	Name              string            `json:"-"`
 	DefaultRepository *RepositoryConfig `json:"-"`
+	HostsConfig       *HostsConfig      `json:"-"`
 }
 
 func (h *HostConfig) IsWildcard() bool {
 	return h.Name == "*"
 }
 
-func (h *HostConfig) Normalize() error {
-	for repository, repositoryConfig := range h.Repositories {
-		err := repositoryConfig.Normalize(repository, h)
+func (h *HostConfig) Normalize(hosts *HostsConfig) error {
+	// Already normalized?
+	if h.HostsConfig != nil {
+		return nil
+	}
+	h.HostsConfig = hosts
+
+	for remote_host, remote := range h.Remotes {
+		remote.HostName = remote_host
+		remote.Host, _ = hosts.Hosts[remote_host]
+	}
+
+	for repo_name, repo_config := range h.Repositories {
+		err := repo_config.Normalize(repo_name, h)
 		if err != nil {
 			return err
 		}
-		h.DefaultRepository = repositoryConfig
+		h.DefaultRepository = repo_config
 	}
 	if len(h.Repositories) != 1 {
 		h.DefaultRepository = nil

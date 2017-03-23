@@ -12,64 +12,29 @@ type HostsConfig struct {
 }
 
 func (h *HostsConfig) Normalize() error {
-	for hostName, hostConfig := range h.Hosts {
-		if hostConfig.Name == "" {
-			hostConfig.Name = hostName
+	for host_name, host_config := range h.Hosts {
+		if host_config.Name != "" {
+			continue
 		}
-		for _, alias := range hostConfig.Alias {
-			h.Hosts[alias] = hostConfig
+		host_config.Name = host_name
+		for _, alias := range host_config.Alias {
+			existing_host, ok := h.Hosts[alias]
+			if ok && existing_host == host_config {
+				return fmt.Errorf("Alias %s is not unique. It's specified twice in %s", alias, existing_host.Name)
+			}
+			if ok {
+				return fmt.Errorf("Alias %s is not unique. It's already assigned to %s", alias, existing_host.Name)
+			}
+			h.Hosts[alias] = host_config
 		}
 	}
 
-	for _, hostConfig := range h.Hosts {
-		for remote_host, remote := range hostConfig.Remotes {
-			remote.HostName = remote_host
-			remote.Host, _ = h.Hosts[remote_host]
-		}
-
-		err := hostConfig.Normalize()
+	for _, host_config := range h.Hosts {
+		err := host_config.Normalize(h)
 		if err != nil {
 			return err
 		}
-
-		for _, repo := range hostConfig.Repositories {
-			if repo.GitConfig.RemoteHostname != "" {
-				var ok bool
-				repo.GitConfig.RemoteHost, ok = h.Hosts[repo.GitConfig.RemoteHostname]
-				if !ok {
-					return fmt.Errorf("%s -> %s: Git remote %s can't be resolved",
-						hostConfig.Name, repo.Name, repo.GitConfig.RemoteHostname)
-				}
-			}
-			for _, platform := range repo.Platforms {
-				for hostName, ep := range platform.Endpoints {
-					var ok bool
-					ep.Host, ok = h.Hosts[ep.HostName]
-					if !ok {
-						return fmt.Errorf("%s -> %s -> %s: Endpoint host %s can't be resolved",
-							hostConfig.Name, repo.Name, platform.Name, ep.HostName)
-					}
-					platform.Endpoints[hostName] = ep
-				}
-			}
-		}
 	}
-
-	global_host, ok := h.Hosts["*"]
-	if ok && global_host.Repositories != nil {
-		// We have a wildcard host entry. Force-inherit specific properties into all named hosts.
-		for _, hostConfig := range h.Hosts {
-			for _, repo := range hostConfig.Repositories {
-				template_repo, ok := global_host.Repositories[repo.Name]
-				if !ok {
-					continue
-				}
-
-				repo.GitConfig.SyncableProperties = template_repo.GitConfig.SyncableProperties
-			}
-		}
-	}
-
 	return h.Validate()
 }
 
@@ -114,4 +79,20 @@ func (h *HostsConfig) HostForPlatform(platform string, localhost string) *HostCo
 	}
 
 	return nil
+}
+
+func (h *HostsConfig) HostByName(host string) *HostConfig {
+	config, ok := h.Hosts[host]
+	if ok {
+		return config
+	}
+	return nil
+}
+
+func (h *HostsConfig) ShortHost(host string) string {
+	config := h.HostByName(host)
+	if config == nil || len(config.Alias) == 0 {
+		return host
+	}
+	return config.Alias[0]
 }
