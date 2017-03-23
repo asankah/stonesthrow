@@ -24,39 +24,35 @@ func (p *PlatformBuildHostServerImpl) GetRepositoryHostServer() *RepositoryHostS
 	return &RepositoryHostServerImpl{Repository: p.Config.Repository, ProcessAdder: p.ProcessAdder}
 }
 
+func (p *PlatformBuildHostServerImpl) IsGomaRunning(ctx context.Context, e Executor, goma_command ...string) bool {
+	output, err := e.ExecuteInWorkDir(p.Config.Host.GomaPath, ctx, goma_command...)
+	if err != nil {
+		return false
+	}
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "compiler proxy ") &&
+			strings.Contains(line, " status: ") &&
+			strings.HasSuffix(line, "ok") {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *PlatformBuildHostServerImpl) EnsureGomaIfNecessary(ctx context.Context, e Executor) error {
-	gomaCtlStampFile := p.Config.Platform.RelativePath("goma_ensure_start_stamp")
-	fileInfo, ok := os.Stat(gomaCtlStampFile)
-	if ok == nil && fileInfo.ModTime().Add(time.Second*60*60*6).After(time.Now()) {
-		return nil
-	}
-
-	if stampFile, ok := os.Create(gomaCtlStampFile); ok == nil {
-		stampFile.Close()
-	}
-
 	if runtime.GOOS == "windows" {
 		attemptedToStartGoma := false
 		for i := 0; i < 5; i += 1 {
-			output, err := e.ExecuteInWorkDirNoStream(p.Config.Host.GomaPath, ctx, "cmd", "/c", "goma_ctl.bat", "status")
-			if err != nil {
-				return err
+			if p.IsGomaRunning(ctx, e, "cmd", "/c", "goma_ctl.bat", "status") {
+				return nil
 			}
-			lines := strings.Split(output, "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "compiler proxy ") &&
-					strings.Contains(line, " status: ") &&
-					strings.HasSuffix(line, "ok") {
-					return nil
-				}
-			}
-
 			if !attemptedToStartGoma {
 				attemptedToStartGoma = true
 				gomaCommand := []string{path.Join(p.Config.Host.GomaPath, "goma_ctl.bat")}
 				cmd := exec.CommandContext(ctx, "cmd.exe", "/c", gomaCommand[0], "ensure_start")
-				err = cmd.Start()
+				err := cmd.Start()
 				// Don't wait for 'goma_ctl.bat ensure_start' to terminate. It won't.
 				if err != nil {
 					return err
@@ -66,7 +62,7 @@ func (p *PlatformBuildHostServerImpl) EnsureGomaIfNecessary(ctx context.Context,
 		}
 		return NewTimedOutError("Couldn't start compiler proxy.")
 	} else {
-		return e.ExecuteInWorkDirPassthrough(p.Config.Host.GomaPath, ctx, "goma_ctl.py", "ensure_start")
+		return e.ExecuteInWorkDirPassthrough(p.Config.Host.GomaPath, ctx, "python", "goma_ctl.py", "ensure_start")
 	}
 }
 
