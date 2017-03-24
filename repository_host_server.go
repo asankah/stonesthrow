@@ -20,7 +20,7 @@ func (r *RepositoryHostServerImpl) GetGitCommandsForJobEventSender(s JobEventSen
 	return executor, commands
 }
 
-func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, rs *RepositoryState) (*GitRepositoryInfo, error) {
+func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, _ *RepositoryState) (*GitRepositoryInfo, error) {
 	properties := r.Repository.GitConfig.SyncableProperties
 	_, commands := r.GetGitCommandsForJobEventSender(nil)
 	propertySet := make(map[string]bool)
@@ -168,6 +168,13 @@ func (r *RepositoryHostServerImpl) SetBranchConfig(info *GitRepositoryInfo, s Re
 func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s RepositoryHost_PullFromUpstreamServer) error {
 	e, commands := r.GetGitCommandsForJobEventSender(s)
 
+	if old_branch, err := commands.GitCurrentBranch(s.Context()); err == nil {
+		err = commands.GitCheckoutRevision(s.Context(), "origin/master")
+		if err == nil {
+			defer commands.GitCheckoutRevision(s.Context(), old_branch)
+		}
+	}
+
 	err := commands.GitFetch(s.Context(), list.GetBranch())
 	if err != nil {
 		return err
@@ -193,7 +200,7 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 	if err != nil {
 		return err
 	}
-	rpc_connection.Close()
+	defer rpc_connection.Close()
 
 	if len(list.GetBranch()) != 0 {
 		filtered_branches := []*GitRepositoryInfo_Branch{}
@@ -213,13 +220,70 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 }
 
 func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s RepositoryHost_PushToUpstreamServer) error {
-	_, commands := r.GetGitCommandsForJobEventSender(s)
+	e, commands := r.GetGitCommandsForJobEventSender(s)
+	branches := list.GetBranch()
 
-	if len(list.GetBranch()) == 0 {
+	if len(branches) == 0 {
 		return NewInvalidArgumentError("No branches")
 	}
 
-	return commands.GitPush(s.Context(), list.GetBranch())
+	if len(branches) == 1 && branches[0] == "HEAD" {
+		var err error
+		branches[0], err = commands.GitCurrentBranch(s.Context())
+		if err != nil {
+			return err
+		}
+	}
+
+	repo_state, err := GetRepositoryState(s.Context(), r.Repository, e, false)
+	if err != nil {
+		return err
+	}
+
+	var remote_config Config
+	remote_config.SelectPeerConfig(r.Config.ConfigurationFile, r.Repository.GitConfig.RemoteHost.Name, r.Repository.Name)
+	rpc_connection, err := ConnectTo(s.Context(), r.Config, remote_config)
+	if err != nil {
+		return err
+	}
+	defer rpc_connection.Close()
+
+	remote_repo_client := NewRepositoryHostClient(rpc_connection)
+	jobevent_receiver, err := remote_repo_client.PrepareForReceive(s.Context(), repo_state)
+	if err != nil {
+		return err
+	}
+	DrainJobEventPipe(jobevent_receiver, s)
+
+	err = commands.GitPush(s.Context(), branches)
+	if err != nil {
+		return err
+	}
+
+	repo_info, err := r.GetBranchConfig(s.Context(), nil)
+	if err != nil {
+		return err
+	}
+
+	if len(list.GetBranch()) != 0 {
+		filtered_branches := []*GitRepositoryInfo_Branch{}
+		allowed_branch_set := make(map[string]bool)
+		for _, branch := range list.GetBranch() {
+			allowed_branch_set[branch] = true
+		}
+		for _, branch := range repo_info.GetBranches() {
+			if _, ok := allowed_branch_set[branch.GetName()]; ok {
+				filtered_branches = append(filtered_branches, branch)
+			}
+		}
+		repo_info.Branches = filtered_branches
+	}
+	jobevent_receiver, err = remote_repo_client.SetBranchConfig(s.Context(), repo_info)
+	if err != nil {
+		return err
+	}
+	DrainJobEventPipe(jobevent_receiver, s)
+	return nil
 }
 
 func (r *RepositoryHostServerImpl) Status(rs *RepositoryState, s RepositoryHost_StatusServer) error {

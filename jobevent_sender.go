@@ -29,3 +29,17 @@ func (t TimestampingJobEventSender) Send(e *JobEvent) error {
 	}
 	return t.sender.Send(e)
 }
+
+func DrainJobEventPipe(receiver JobEventReceiver, sender JobEventSender) error {
+	for {
+		je, err := receiver.Recv()
+		if err != nil {
+			return err
+		}
+
+		err = sender.Send(je)
+		if err != nil {
+			return err
+		}
+	}
+}
