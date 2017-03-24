@@ -3,6 +3,7 @@ package stonesthrow
 import (
 	"fmt"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,6 +19,34 @@ func (r *RepositoryHostServerImpl) GetGitCommandsForJobEventSender(s JobEventSen
 	executor := NewJobEventExecutor(r.Repository.Host.Name, r.Repository.SourcePath, r.ProcessAdder, s)
 	commands := RepositoryCommands{Repository: r.Repository, Executor: executor}
 	return executor, commands
+}
+
+func (r *RepositoryHostServerImpl) GetRepositoryHostPeer(ctx context.Context) (*grpc.ClientConn, RepositoryHostClient, error) {
+	var remote_config Config
+	remote_config.SelectPeerConfig(r.Config.ConfigurationFile, r.Repository.GitConfig.RemoteHost.Name, r.Repository.Name)
+	rpc_connection, err := ConnectTo(ctx, r.Config, remote_config)
+	if err != nil {
+		return nil, nil, err
+	}
+	remote_repo_client := NewRepositoryHostClient(rpc_connection)
+	return rpc_connection, remote_repo_client, nil
+}
+
+func SelectMatchingBranchConfigs(branches []string, branch_configs []*GitRepositoryInfo_Branch) []*GitRepositoryInfo_Branch {
+	if len(branches) == 0 {
+		return branch_configs
+	}
+	filtered_branches := []*GitRepositoryInfo_Branch{}
+	allowed_branch_set := make(map[string]bool)
+	for _, branch := range branches {
+		allowed_branch_set[branch] = true
+	}
+	for _, branch := range branch_configs {
+		if _, ok := allowed_branch_set[branch.GetName()]; ok {
+			filtered_branches = append(filtered_branches, branch)
+		}
+	}
+	return filtered_branches
 }
 
 func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, _ *RepositoryState) (*GitRepositoryInfo, error) {
@@ -189,33 +218,18 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 		return err
 	}
 
-	var remote_config Config
-	remote_config.SelectPeerConfig(r.Config.ConfigurationFile, r.Repository.GitConfig.RemoteHost.Name, r.Repository.Name)
-	rpc_connection, err := ConnectTo(s.Context(), r.Config, remote_config)
-	if err != nil {
-		return err
-	}
-	remote_repo_client := NewRepositoryHostClient(rpc_connection)
-	remote_repo_info, err := remote_repo_client.GetBranchConfig(s.Context(), repo_state)
+	rpc_connection, remote_repo_client, err := r.GetRepositoryHostPeer(s.Context())
 	if err != nil {
 		return err
 	}
 	defer rpc_connection.Close()
 
-	if len(list.GetBranch()) != 0 {
-		filtered_branches := []*GitRepositoryInfo_Branch{}
-		allowed_branch_set := make(map[string]bool)
-		for _, branch := range list.GetBranch() {
-			allowed_branch_set[branch] = true
-		}
-		for _, branch := range remote_repo_info.GetBranches() {
-			if _, ok := allowed_branch_set[branch.GetName()]; ok {
-				filtered_branches = append(filtered_branches, branch)
-			}
-		}
-		remote_repo_info.Branches = filtered_branches
+	remote_repo_info, err := remote_repo_client.GetBranchConfig(s.Context(), repo_state)
+	if err != nil {
+		return err
 	}
 
+	remote_repo_info.Branches = SelectMatchingBranchConfigs(list.GetBranch(), remote_repo_info.GetBranches())
 	return r.SetBranchConfig(remote_repo_info, s)
 }
 
@@ -240,15 +254,12 @@ func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s Repository
 		return err
 	}
 
-	var remote_config Config
-	remote_config.SelectPeerConfig(r.Config.ConfigurationFile, r.Repository.GitConfig.RemoteHost.Name, r.Repository.Name)
-	rpc_connection, err := ConnectTo(s.Context(), r.Config, remote_config)
+	rpc_connection, remote_repo_client, err := r.GetRepositoryHostPeer(s.Context())
 	if err != nil {
 		return err
 	}
 	defer rpc_connection.Close()
 
-	remote_repo_client := NewRepositoryHostClient(rpc_connection)
 	jobevent_receiver, err := remote_repo_client.PrepareForReceive(s.Context(), repo_state)
 	if err != nil {
 		return err
@@ -265,19 +276,7 @@ func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s Repository
 		return err
 	}
 
-	if len(list.GetBranch()) != 0 {
-		filtered_branches := []*GitRepositoryInfo_Branch{}
-		allowed_branch_set := make(map[string]bool)
-		for _, branch := range list.GetBranch() {
-			allowed_branch_set[branch] = true
-		}
-		for _, branch := range repo_info.GetBranches() {
-			if _, ok := allowed_branch_set[branch.GetName()]; ok {
-				filtered_branches = append(filtered_branches, branch)
-			}
-		}
-		repo_info.Branches = filtered_branches
-	}
+	repo_info.Branches = SelectMatchingBranchConfigs(list.GetBranch(), repo_info.GetBranches())
 	jobevent_receiver, err = remote_repo_client.SetBranchConfig(s.Context(), repo_info)
 	if err != nil {
 		return err
