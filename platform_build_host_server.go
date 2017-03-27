@@ -3,6 +3,7 @@ package stonesthrow
 import (
 	"fmt"
 	"golang.org/x/net/context"
+	"os"
 	"os/exec"
 	"path"
 	"runtime"
@@ -116,15 +117,64 @@ func (p *PlatformBuildHostServerImpl) Build(bo *BuildOptions, s PlatformBuildHos
 }
 
 func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_RunServer) error {
-	return NewNothingToDoError("not implemented")
+	return NewNothingToDoError("'Run' not implemented")
 }
 
 func (p *PlatformBuildHostServerImpl) Clobber(co *ClobberOptions, s PlatformBuildHost_ClobberServer) error {
-	return NewNothingToDoError("not implemented")
+	if co.GetPlatform() == "" {
+		return NewInvalidPlatformError("platform is empty")
+	}
+
+	if co.GetTarget() == ClobberOptions_SOURCE {
+		repo := p.GetRepositoryHostServer()
+		_, commands := repo.GetGitCommandsForJobEventSender(s)
+		command := []string{"git", "clean"}
+		if co.GetForce() {
+			command = append(command, "--force")
+		}
+		return commands.ExecutePassthrough(s.Context(), command...)
+	}
+
+	if !co.GetForce() {
+		s.Send(&JobEvent{
+			LogEvent: &LogEvent{
+				Host:     p.Config.Host.Name,
+				Severity: LogEvent_INFO,
+				Msg:      fmt.Sprintf("Will remove %s", p.Config.Platform.BuildPath)}})
+		return nil
+	}
+
+	err := os.RemoveAll(p.Config.Platform.BuildPath)
+	if err != nil {
+		return err
+	}
+
+	return p.Prepare(nil, s)
 }
 
 func (p *PlatformBuildHostServerImpl) Clean(bo *BuildOptions, s PlatformBuildHost_CleanServer) error {
-	return NewNothingToDoError("not implemented")
+	if len(bo.GetTargets()) == 0 {
+		return NewInvalidArgumentError("no targets specified")
+	}
+
+	if bo.GetPlatform() == "" {
+		return NewInvalidPlatformError("platform is empty")
+	}
+
+	if p.Config.PlatformName != bo.GetPlatform() {
+		return NewInvalidPlatformError("this builder only knows about %s. Requested building on %s",
+			p.Config.PlatformName, bo.GetPlatform())
+	}
+
+	command := []string{"ninja"}
+	if p.Config.Host.MaxBuildJobs != 0 {
+		command = append(command, "-j", fmt.Sprintf("%d", p.Config.Host.MaxBuildJobs))
+	}
+	command = append(command, "-t", "clean")
+	command = append(command, bo.GetTargets()...)
+
+	e := p.GetExecutor(s)
+	return e.ExecutePassthrough(s.Context(), command...)
 }
 
 func (p *PlatformBuildHostServerImpl) Prepare(bo *BuildOptions, s PlatformBuildHost_PrepareServer) error {
