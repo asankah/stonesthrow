@@ -1,9 +1,11 @@
 package stonesthrow
 
 import (
+	"fmt"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"os"
+	"os/exec"
 	"time"
 )
 
@@ -38,7 +40,22 @@ func (h *ServiceHostServerImpl) Shutdown(rs *RepositoryState, s ServiceHost_Shut
 }
 
 func (h *ServiceHostServerImpl) SelfUpdate(rs *RepositoryState, s ServiceHost_SelfUpdateServer) error {
-	return NewNothingToDoError("not implemented")
+	updater_command := []string{
+		"st_reload", "-pid", fmt.Sprintf("%d", os.Getpid()), "-package", "github.com/asankah/stonesthrow/...", "--",
+		"st_host",
+		"-platform", h.Config.PlatformName,
+		"-repository", h.Config.RepositoryName,
+		"-config", h.Config.ConfigurationFile.FileName}
+	h.Shutdown(rs, s)
+	cmd := exec.Command(updater_command[0], updater_command[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (h *ServiceHostServerImpl) AddProcess(command []string, process *os.Process) {
