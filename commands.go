@@ -183,13 +183,15 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(build_client)
 		}},
 
-	{"clean", "builder",
-		`'clean build' cleans the build directory, while 'clean source' cleans the source directory.`, "",
+	{"clobber", "builder",
+		`removes files from source or build directory.`, `Usage: clobber [-out|-src] [-force]
+
+`,
 		func(f *flag.FlagSet) {
-			f.Bool("out", false, "Clean the output directory.")
-			f.Bool("src", false, "Clean the source directory.")
+			f.Bool("out", false, "clean the output directory.")
+			f.Bool("src", false, "clean the source directory.")
 			f.Bool("force", false,
-				"Actually do the cleaning. Without this flag, the command merely lists which files would be affected.")
+				"actually do the cleaning. Without this flag, the command merely lists which files would be affected.")
 		},
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			outValue := f.Lookup("out")
@@ -227,7 +229,7 @@ var DefaultHandlers = []CommandHandler{
 		}},
 
 	{"ping", "service control",
-		`Diagnostic. Responds with a pong.`, "", nil,
+		`diagnostic. responds with a pong.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			rpc_connection, err := conn.GetConnection(ctx)
 			if err != nil {
