@@ -49,4 +49,5 @@ var (
 	NewFailedToPushGitBranchError, IsFailedToPushGitBranchError         = NewErrorClass("failed to push git branch")
 	NewEndpointNotFoundError, IsEndpointNotFoundError                   = NewErrorClass("endpoint not found")
 	NewNothingToDoError, IsNothingToDoError                             = NewErrorClass("nothing to do")
+	NewConnectionError, IsConnectionError                               = NewErrorClass("connection failed")
 )

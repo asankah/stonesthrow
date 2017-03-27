@@ -11,6 +11,13 @@ import (
 	"time"
 )
 
+func wrapConnectError(c *grpc.ClientConn, e error) (*grpc.ClientConn, error) {
+	if e != nil {
+		e = NewConnectionError("%s", e.Error())
+	}
+	return c, e
+}
+
 func getCredentialsForClient(client_config Config) (credentials.TransportCredentials, error) {
 	if client_config.Host.Certificates == nil || client_config.Host.Certificates.RootCert == nil {
 		return nil, NewConfigIncompleteError("Client does not specify a CA certificate")
@@ -25,9 +32,10 @@ func connectToLocalEndpoint(ctx context.Context, client_config, server_config Co
 		return nil, err
 	}
 
-	return grpc.DialContext(ctx, endpoint.Address,
-		grpc.WithAuthority(server_config.Host.Name),
-		grpc.WithTransportCredentials(creds))
+	return wrapConnectError(
+		grpc.DialContext(ctx, endpoint.Address,
+			grpc.WithAuthority(server_config.Host.Name),
+			grpc.WithTransportCredentials(creds)))
 }
 
 func connectViaSsh(ctx context.Context, client_config, server_config Config, remote RemoteTransportConfig) (*grpc.ClientConn, error) {
@@ -50,12 +58,13 @@ func connectViaSsh(ctx context.Context, client_config, server_config Config, rem
 	cmd.Stderr = os.Stderr
 	cmd.Start()
 
-	return grpc.DialContext(ctx, server_config.Host.Name+":"+server_config.Platform.Name,
-		grpc.WithAuthority(server_config.Host.Name),
-		grpc.WithTransportCredentials(creds),
-		grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
-			return PipeConnection{reader: readEnd, writer: writeEnd}, nil
-		}))
+	return wrapConnectError(
+		grpc.DialContext(ctx, server_config.Host.Name+":"+server_config.Platform.Name,
+			grpc.WithAuthority(server_config.Host.Name),
+			grpc.WithTransportCredentials(creds),
+			grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
+				return PipeConnection{reader: readEnd, writer: writeEnd}, nil
+			})))
 }
 
 func ConnectTo(ctx context.Context, client_config, server_config Config) (*grpc.ClientConn, error) {
