@@ -391,6 +391,25 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.Drain(event_stream)
 		}},
 
+	{"update", "service control",
+		`self-update`, "", nil,
+		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			service_host_client := NewServiceHostClient(rpc_connection)
+			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
+			if err != nil {
+				return err
+			}
+			event_stream, err := service_host_client.SelfUpdate(ctx, repo_state)
+			if err != nil {
+				return err
+			}
+			return conn.Sink.Drain(event_stream)
+		}},
+
 	{"list", "builder",
 		"list available targets", "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
