@@ -82,23 +82,28 @@ func (r RepositoryCommands) GitCreateBuilderHead(ctx context.Context) (string, e
 	}
 
 	var tree string
-	if len(status.ModifiedFiles) > 0 {
-		command := []string{"git", "update-index", "--"}
-		command = append(command, status.ModifiedFiles...)
-		_, err = r.Execute(ctx, command...)
+	if !status.HasModified {
+		revision, err := r.GitRevision(ctx, "HEAD")
 		if err != nil {
 			return "", err
 		}
+		_, err = r.Execute(ctx, "git", "update-ref", "refs/heads/BUILDER_HEAD", revision)
+		if err != nil {
+			return "", err
+		}
+		return revision, nil
+	}
 
-		tree, err = r.Execute(ctx, "git", "write-tree")
-		if err != nil {
-			return "", err
-		}
-	} else {
-		tree, err = r.GitTreeForRevision(ctx, "HEAD")
-		if err != nil {
-			return "", err
-		}
+	command := []string{"git", "update-index", "--"}
+	command = append(command, status.ModifiedFiles...)
+	_, err = r.Execute(ctx, command...)
+	if err != nil {
+		return "", err
+	}
+
+	tree, err = r.Execute(ctx, "git", "write-tree")
+	if err != nil {
+		return "", err
 	}
 
 	builderTree, err := r.GitTreeForRevision(ctx, "BUILDER_HEAD")
