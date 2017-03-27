@@ -41,7 +41,7 @@ func (h *ServiceHostServerImpl) Shutdown(rs *RepositoryState, s ServiceHost_Shut
 
 func (h *ServiceHostServerImpl) SelfUpdate(rs *RepositoryState, s ServiceHost_SelfUpdateServer) error {
 	updater_command := []string{
-		"st_reload", "-pid", fmt.Sprintf("%d", os.Getpid()), "-package", "github.com/asankah/stonesthrow/...", "--",
+		"st_reload", "-pid", fmt.Sprintf("%d", os.Getpid()), "-package", "github.com/asankah/stonesthrow", "--",
 		"st_host",
 		"-platform", h.Config.PlatformName,
 		"-repository", h.Config.RepositoryName,

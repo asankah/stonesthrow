@@ -40,7 +40,6 @@ func main() {
 	err = RunCommandAndWait("go", "get", "-u", *goPackage)
 	if err != nil {
 		fmt.Printf("Failed to run 'go get -u %s': %s", *goPackage, err.Error())
-		os.Exit(1)
 	}
 
 	args := flag.Args()
@@ -56,7 +55,9 @@ func main() {
 	cmd.Stderr = os.Stderr
 	err = cmd.Start()
 	if err != nil {
+		fmt.Printf("Failed to start %s: error %s", err.Error())
 		os.Exit(1)
 	}
+	fmt.Println("Done")
 	return
 }
