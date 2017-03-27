@@ -3,7 +3,6 @@ package stonesthrow
 import (
 	"fmt"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,15 +20,15 @@ func (r *RepositoryHostServerImpl) GetGitCommandsForJobEventSender(s JobEventSen
 	return executor, commands
 }
 
-func (r *RepositoryHostServerImpl) GetRepositoryHostPeer(ctx context.Context) (*grpc.ClientConn, RepositoryHostClient, error) {
+func (r *RepositoryHostServerImpl) GetRepositoryHostPeer(ctx context.Context) (RepositoryHostClient, error) {
 	var remote_config Config
 	remote_config.SelectPeerConfig(r.Config.ConfigurationFile, r.Repository.GitConfig.RemoteHost.Name, r.Repository.Name)
 	rpc_connection, err := ConnectTo(ctx, r.Config, remote_config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	remote_repo_client := NewRepositoryHostClient(rpc_connection)
-	return rpc_connection, remote_repo_client, nil
+	return remote_repo_client, nil
 }
 
 func SelectMatchingBranchConfigs(branches []string, branch_configs []*GitRepositoryInfo_Branch) []*GitRepositoryInfo_Branch {
@@ -218,11 +217,10 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 		return err
 	}
 
-	rpc_connection, remote_repo_client, err := r.GetRepositoryHostPeer(s.Context())
+	remote_repo_client, err := r.GetRepositoryHostPeer(s.Context())
 	if err != nil {
 		return err
 	}
-	defer rpc_connection.Close()
 
 	remote_repo_info, err := remote_repo_client.GetBranchConfig(s.Context(), repo_state)
 	if err != nil {
@@ -254,11 +252,10 @@ func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s Repository
 		return err
 	}
 
-	rpc_connection, remote_repo_client, err := r.GetRepositoryHostPeer(s.Context())
+	remote_repo_client, err := r.GetRepositoryHostPeer(s.Context())
 	if err != nil {
 		return err
 	}
-	defer rpc_connection.Close()
 
 	jobevent_receiver, err := remote_repo_client.PrepareForReceive(s.Context(), repo_state)
 	if err != nil {
