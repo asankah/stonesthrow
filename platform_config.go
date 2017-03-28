@@ -81,12 +81,3 @@ func (p *PlatformConfig) RelativePath(paths ...string) string {
 	paths = append([]string{p.BuildPath}, paths...)
 	return filepath.Join(paths...)
 }
-
-func (p *PlatformConfig) GetAllTargets(testOnly bool) (map[string]Command, error) {
-	return map[string]Command{
-		"net_unittests":        {Aliases: []string{"nu"}},
-		"content_unittests":    {Aliases: []string{"cu"}},
-		"content_browsertests": {Aliases: []string{"cb"}},
-		"unit_tests":           {},
-		"browser_tests":        {}}, nil
-}
