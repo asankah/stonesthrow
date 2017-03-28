@@ -39,20 +39,20 @@ func (c *Config) newError(s string, v ...interface{}) error {
 }
 
 func (c *Config) SelectLocalClientConfig(configFile *ConfigurationFile, serverPlatform string, repository string) error {
-	err := c.SelectLocalServerConfig(configFile, serverPlatform, repository)
+	err := c.SelectServerConfig(configFile, serverPlatform, repository)
 	if err != nil {
 		return err
 	}
 
-	hostname, err := os.Hostname()
+	localhost, err := os.Hostname()
 	if err != nil {
 		return err
 	}
 
 	var ok bool
-	c.Host, ok = configFile.HostsConfig.Hosts[hostname]
+	c.Host, ok = configFile.HostsConfig.Hosts[localhost]
 	if !ok {
-		return c.newError("Can't determine local host config for %s", hostname)
+		return c.newError("Can't determine local host config for %s", localhost)
 	}
 
 	c.Repository, ok = c.Host.Repositories[c.RepositoryName]
@@ -66,15 +66,20 @@ func (c *Config) SelectLocalClientConfig(configFile *ConfigurationFile, serverPl
 	return nil
 }
 
-func (c *Config) selectRepositoryFromCurrentDir() (string, error) {
+func (c *Config) selectRepositoryFromCurrentDir(localhost string) (string, error) {
 	current_dir, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 
+	host_config, ok := c.ConfigurationFile.HostsConfig.Hosts[localhost]
+	if !ok {
+		return "", c.newError("localhost (%s) doesn't have a mapping.", localhost)
+	}
+
 	repo_info_map := make(map[string]os.FileInfo)
 
-	for name, config := range c.Host.Repositories {
+	for name, config := range host_config.Repositories {
 		file_info, err := os.Stat(config.SourcePath)
 		if err != nil {
 			return "", err
@@ -105,28 +110,29 @@ func (c *Config) selectRepositoryFromCurrentDir() (string, error) {
 // receiver with the values corresponding to |platform| and |repository|.  It
 // returns an error if something went wrong, in which case the state of the
 // receiver is unknown.
-func (c *Config) SelectLocalServerConfig(configFile *ConfigurationFile, platform string, repository string) error {
+func (c *Config) SelectServerConfig(configFile *ConfigurationFile, platform string, repository string) error {
 	c.ConfigurationFile = configFile
 	c.PlatformName = platform
 
-	hostname, err := os.Hostname()
+	localhost, err := os.Hostname()
 	if err != nil {
 		return err
 	}
 
-	c.Host = configFile.HostsConfig.HostForPlatform(platform, hostname)
-	if c.Host == nil {
-		return fmt.Errorf("%s is not a valid platform", c.PlatformName)
-	}
-
-	var ok bool
 	if repository == "" {
-		repository, err = c.selectRepositoryFromCurrentDir()
+		var err error
+		repository, err = c.selectRepositoryFromCurrentDir(localhost)
 		if err != nil {
 			return c.newError("can't select repository for current directory")
 		}
 	}
 
+	c.Host = configFile.HostsConfig.HostForPlatform(repository, platform, localhost)
+	if c.Host == nil {
+		return fmt.Errorf("%s is not a valid platform", c.PlatformName)
+	}
+
+	var ok bool
 	c.Repository, ok = c.Host.Repositories[repository]
 	if ok {
 		c.Platform, _ = c.Repository.Platforms[platform]

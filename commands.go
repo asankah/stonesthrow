@@ -53,7 +53,7 @@ func (c *ClientConnection) InitFromFlags(ctx context.Context, f *flag.FlagSet) e
 		return err
 	}
 
-	err = server_config.SelectLocalServerConfig(&config_file, c.platform, c.repository)
+	err = server_config.SelectServerConfig(&config_file, c.platform, c.repository)
 	if err != nil {
 		return err
 	}

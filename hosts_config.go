@@ -66,14 +66,20 @@ func (h *HostsConfig) ReadFrom(filename string) error {
 	return h.Normalize()
 }
 
-func (h *HostsConfig) HostForPlatform(platform string, localhost string) *HostConfig {
+func (h *HostsConfig) HostForPlatform(repository string, platform string, localhost string) *HostConfig {
 	config, ok := h.Hosts[localhost]
 	if ok && config.SupportsPlatform(platform) {
 		return config
 	}
 
 	for _, config = range h.Hosts {
-		if config.SupportsPlatform(platform) {
+		repo, ok := config.Repositories[repository]
+		if !ok {
+			continue
+		}
+
+		_, ok = repo.Platforms[platform]
+		if ok {
 			return config
 		}
 	}
