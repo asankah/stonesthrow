@@ -372,25 +372,21 @@ func (r *RepositoryHostServerImpl) RebaseUpdate(rs *RepositoryState, s Repositor
 	return err
 }
 
-func GetRepositoryState(ctx context.Context, r *RepositoryConfig, e Executor, create_builder_head bool) (*RepositoryState, error) {
+func GetRepositoryState(ctx context.Context, r *RepositoryConfig, e Executor, push_builder_head bool) (*RepositoryState, error) {
 	var revision string
 	var err error
 	commands := RepositoryCommands{Repository: r, Executor: e}
-	if create_builder_head {
-		revision, err = commands.GitCreateBuilderHead(ctx)
-		if err == nil {
-			err = commands.GitPushBuilderHead(ctx)
-
-			// If there is no upstream, then there's no need to push the BUILDER_HEAD anyway.
-			if IsNoUpstreamError(err) {
-				err = nil
-			}
-		}
-	} else {
-		revision, err = commands.GitRevision(ctx, "HEAD")
-	}
+	revision, err = commands.GitCreateBuilderHead(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if push_builder_head {
+		err = commands.GitPushBuilderHead(ctx)
+
+		// If there is no upstream, then there's no need to push the BUILDER_HEAD anyway.
+		if IsNoUpstreamError(err) {
+			err = nil
+		}
 	}
 	return &RepositoryState{
 		Repository: r.Name,
