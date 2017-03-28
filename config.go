@@ -66,13 +66,47 @@ func (c *Config) SelectLocalClientConfig(configFile *ConfigurationFile, serverPl
 	return nil
 }
 
+func (c *Config) selectRepositoryFromCurrentDir() (string, error) {
+	current_dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	repo_info_map := make(map[string]os.FileInfo)
+
+	for name, config := range c.Host.Repositories {
+		file_info, err := os.Stat(config.SourcePath)
+		if err != nil {
+			return "", err
+		}
+		repo_info_map[name] = file_info
+	}
+
+	for {
+		file_info, err := os.Stat(current_dir)
+		if err != nil {
+			return "", err
+		}
+
+		for name, repo_info := range repo_info_map {
+			if os.SameFile(file_info, repo_info) {
+				return name, nil
+			}
+		}
+
+		current_dir = filepath.Dir(current_dir)
+		if current_dir == "." || current_dir == string(filepath.Separator) {
+			return "", io.EOF
+		}
+	}
+}
+
 // ReadServerConfig reads the configuration from |filename| and populates the
 // receiver with the values corresponding to |platform| and |repository|.  It
 // returns an error if something went wrong, in which case the state of the
 // receiver is unknown.
 func (c *Config) SelectLocalServerConfig(configFile *ConfigurationFile, platform string, repository string) error {
 	c.ConfigurationFile = configFile
-
 	c.PlatformName = platform
 
 	hostname, err := os.Hostname()
@@ -87,19 +121,15 @@ func (c *Config) SelectLocalServerConfig(configFile *ConfigurationFile, platform
 
 	var ok bool
 	if repository == "" {
-		for name, config := range c.Host.Repositories {
-			c.Platform, ok = config.Platforms[platform]
-			if ok {
-				repository = name
-				c.Repository = config
-				break
-			}
+		repository, err = c.selectRepositoryFromCurrentDir()
+		if err != nil {
+			return c.newError("can't select repository for current directory")
 		}
-	} else {
-		c.Repository, ok = c.Host.Repositories[repository]
-		if ok {
-			c.Platform, ok = c.Repository.Platforms[platform]
-		}
+	}
+
+	c.Repository, ok = c.Host.Repositories[repository]
+	if ok {
+		c.Platform, _ = c.Repository.Platforms[platform]
 	}
 
 	if c.Host == nil || c.Repository == nil || c.Platform == nil {

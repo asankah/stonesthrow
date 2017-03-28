@@ -32,9 +32,9 @@ func (c *ClientConnection) SetupTopLevelFlags(f *flag.FlagSet) {
 	default_server_platform := path.Base(os.Args[0])
 	default_config_file := GetDefaultConfigFile()
 
-	f.StringVar(&c.platform, "platform", default_server_platform, "Server platform.")
-	f.StringVar(&c.repository, "repository", "", "Repository")
-	f.StringVar(&c.config_filename, "config", default_config_file, "Configuration file")
+	f.StringVar(&c.platform, "platform", default_server_platform, "target server platform.")
+	f.StringVar(&c.repository, "repository", "", "repository name. defaults to the repository corresponding to the current directory.")
+	f.StringVar(&c.config_filename, "config", default_config_file, "configuration file.")
 }
 
 func (c *ClientConnection) InitFromFlags(ctx context.Context, f *flag.FlagSet) error {
