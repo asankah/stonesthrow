@@ -134,7 +134,7 @@ func (r RepositoryCommands) GitFetchBuilderHead(ctx context.Context) error {
 	return r.GitFetch(ctx, []string{"BUILDER_HEAD"})
 }
 
-func (r RepositoryCommands) branchListToRefspec(ctx context.Context, branches []string) []string {
+func (r RepositoryCommands) branchListToRefspec(ctx context.Context, branches []string, force bool) []string {
 	refspecs := []string{}
 
 	for _, branch := range branches {
@@ -144,10 +144,15 @@ func (r RepositoryCommands) branchListToRefspec(ctx context.Context, branches []
 		if branch == "" {
 			continue
 		}
-		if branch == "*" {
+		if branch == "*" || branch == "all" {
 			branch = "refs/heads/*"
 		}
-		refspecs = append(refspecs, fmt.Sprintf("+%s:%s", branch, branch))
+
+		if force {
+			refspecs = append(refspecs, fmt.Sprintf("+%s:%s", branch, branch))
+		} else {
+			refspecs = append(refspecs, fmt.Sprintf("%s:%s", branch, branch))
+		}
 	}
 	return refspecs
 }
@@ -162,7 +167,7 @@ func (r RepositoryCommands) GitPush(ctx context.Context, branches []string) erro
 	}
 
 	command := []string{"git", "push", r.Repository.GitConfig.Remote, "--porcelain", "--thin", "--force"}
-	command = append(command, r.branchListToRefspec(ctx, branches)...)
+	command = append(command, r.branchListToRefspec(ctx, branches, false)...)
 
 	output, err := r.Execute(ctx, command...)
 	lines := strings.Split(output, "\n")
@@ -207,7 +212,7 @@ func (r RepositoryCommands) GitFetch(ctx context.Context, branches []string) err
 		branches = []string{"*"}
 	}
 	command := []string{"git", "fetch", r.Repository.GitConfig.Remote}
-	command = append(command, r.branchListToRefspec(ctx, append(branches, "refs/remotes/origin/master"))...)
+	command = append(command, r.branchListToRefspec(ctx, append(branches, "refs/remotes/origin/master"), true)...)
 
 	return r.ExecutePassthrough(ctx, command...)
 }

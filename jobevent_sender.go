@@ -1,6 +1,8 @@
 package stonesthrow
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type JobEventSender interface {
 	Send(*JobEvent) error
@@ -42,4 +44,12 @@ func DrainJobEventPipe(receiver JobEventReceiver, sender JobEventSender) error {
 			return err
 		}
 	}
+}
+
+func SendLog(j JobEventSender, severity LogEvent_Severity, format string, args ...interface{}) error {
+	return j.Send(&JobEvent{
+		Time: TimestampNow(),
+		LogEvent: &LogEvent{
+			Severity: severity,
+			Msg:      fmt.Sprintf(format, args...)}})
 }

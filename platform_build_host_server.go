@@ -185,3 +185,7 @@ func (p *PlatformBuildHostServerImpl) Prepare(bo *BuildOptions, s PlatformBuildH
 func (p *PlatformBuildHostServerImpl) ListTargets(ctx context.Context, bo *BuildOptions) (*TargetList, error) {
 	return nil, NewNothingToDoError("not implemented")
 }
+
+func (r *PlatformBuildHostServerImpl) FetchFile(fo *FetchFileOptions, s PlatformBuildHost_FetchFileServer) error {
+	return SendFiles(s.Context(), r.Config.Platform.BuildPath, fo, s)
+}

@@ -372,6 +372,10 @@ func (r *RepositoryHostServerImpl) RebaseUpdate(rs *RepositoryState, s Repositor
 	return err
 }
 
+func (r *RepositoryHostServerImpl) FetchFile(fo *FetchFileOptions, s RepositoryHost_FetchFileServer) error {
+	return SendFiles(s.Context(), r.Repository.SourcePath, fo, s)
+}
+
 func GetRepositoryState(ctx context.Context, r *RepositoryConfig, e Executor, push_builder_head bool) (*RepositoryState, error) {
 	var revision string
 	var err error

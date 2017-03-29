@@ -5,11 +5,44 @@ import (
 	"flag"
 	"fmt"
 	"github.com/google/subcommands"
+	net_context "golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 )
+
+type FileExtractor struct {
+	receiver   JobEventReceiver
+	sender     JobEventSender
+	base_path  string
+	dont_write bool
+}
+
+func (f FileExtractor) Recv() (*JobEvent, error) {
+	for {
+		j, err := f.receiver.Recv()
+		if err != nil {
+			return nil, err
+		}
+
+		if j.GetZippedContent() != nil {
+			ReceiveFiles(f.receiver.Context(), f.base_path, f.dont_write, j.GetZippedContent(), f.sender)
+			continue
+		}
+
+		return j, err
+	}
+}
+
+func (f FileExtractor) Header() (metadata.MD, error) { return f.receiver.Header() }
+func (f FileExtractor) Trailer() metadata.MD         { return f.receiver.Trailer() }
+func (f FileExtractor) CloseSend() error             { return f.receiver.CloseSend() }
+func (f FileExtractor) Context() net_context.Context { return f.receiver.Context() }
+func (f FileExtractor) SendMsg(m interface{}) error  { return f.receiver.SendMsg(m) }
+func (f FileExtractor) RecvMsg(m interface{}) error  { return f.receiver.RecvMsg(m) }
 
 type ClientConnection struct {
 	ClientConfig Config
@@ -226,6 +259,61 @@ var DefaultHandlers = []CommandHandler{
 			}
 
 			return conn.Sink.Drain(output_client)
+		}},
+
+	{"get", "builder",
+		`get a file or multiple files from a build directory.`, `Usage: get [-src|-out] [-n] [-r] path [glob]
+`,
+		func(f *flag.FlagSet) {
+			f.Bool("src", false, "get files from source directory.")
+			f.Bool("out", false, "get files from output directory. this is the default.")
+			f.Bool("n", false, "don't write any files. Just list what would've been transferred.")
+			f.Bool("r", false, "recursively select files that match GLOB")
+		},
+		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
+			srcValue := f.Lookup("src")
+			nValue := f.Lookup("n")
+			rValue := f.Lookup("r")
+
+			if f.NArg() == 0 {
+				return NewInvalidArgumentError("no path or glob specified")
+			}
+
+			if f.NArg() > 2 {
+				return NewInvalidArgumentError("too many paths specified")
+			}
+
+			if srcValue.Value.String() == "true" {
+				return NewNothingToDoError("not implemented")
+			}
+
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+
+			options := FetchFileOptions{}
+			if f.NArg() == 1 {
+				options.FilenameGlob = f.Arg(0)
+			} else {
+				options.RelativePath = f.Arg(0)
+				options.FilenameGlob = f.Arg(1)
+			}
+			if rValue.Value.String() == "true" {
+				options.Recurse = true
+			}
+
+			builder_client := NewPlatformBuildHostClient(rpc_connection)
+			stream, err := builder_client.FetchFile(ctx, &options)
+			if err != nil {
+				return err
+			}
+			extractor := FileExtractor{
+				receiver:   stream,
+				sender:     conn.Sink,
+				base_path:  filepath.Join(conn.ClientConfig.Repository.SourcePath, conn.ServerConfig.Platform.RelativeBuildPath),
+				dont_write: nValue.Value.String() == "true"}
+			return conn.Sink.Drain(extractor)
 		}},
 
 	{"ping", "service control",

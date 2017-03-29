@@ -1,4 +1,4 @@
-// Generate with 'protoc --go_out=plugins=grpc:. *.proto
+// Generate with '! protoc --go_out=plugins=grpc:. *.proto
 
 syntax = "proto3";
 
@@ -95,6 +95,10 @@ message GitBranchTaskEvent {
   string reason = 4;
 }
 
+message ZippedContentEvent {
+  bytes data = 1;
+}
+
 message JobEvent {
   google.protobuf.Timestamp time = 1;
 
@@ -103,6 +107,7 @@ message JobEvent {
   CommandOutputEvent command_output_event = 4;
   EndCommandEvent end_command_event = 5;
   GitBranchTaskEvent branch_task_event = 6;
+  ZippedContentEvent zipped_content = 7;
 }
 
 message BuildOptions {
@@ -145,6 +150,12 @@ message PingResult {
   string pong = 1;
 }
 
+message FetchFileOptions {
+  string relative_path = 1;
+  string filename_glob = 2;
+  bool recurse = 3;
+}
+
 service PlatformBuildHost {
   rpc Build(BuildOptions) returns (stream JobEvent);
   rpc Run(RunOptions) returns (stream JobEvent);
@@ -152,6 +163,7 @@ service PlatformBuildHost {
   rpc Clean(BuildOptions) returns (stream JobEvent);
   rpc Prepare(BuildOptions) returns (stream JobEvent);
   rpc ListTargets(BuildOptions) returns (TargetList);
+  rpc FetchFile(FetchFileOptions) returns (stream JobEvent);
 }
 
 service RepositoryHost {
@@ -164,6 +176,7 @@ service RepositoryHost {
   rpc SyncRemote(RepositoryState) returns (stream JobEvent);
   rpc PrepareForReceive(RepositoryState) returns (stream JobEvent);
   rpc RebaseUpdate(RepositoryState) returns (stream JobEvent);
+  rpc FetchFile(FetchFileOptions) returns (stream JobEvent);
 }
 
 service ServiceHost {
