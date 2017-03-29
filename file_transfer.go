@@ -57,7 +57,7 @@ func SendFiles(ctx context.Context, workdir string, fetch_options *FetchFileOpti
 		var file_list []string
 		p_file_list := &file_list
 		err := filepath.Walk(base_path, func(filename string, info os.FileInfo, err error) error {
-			if info.IsDir() || err != nil {
+			if err != nil || info.IsDir() {
 				return nil
 			}
 			matched, err := filepath.Match(fetch_options.FilenameGlob, filepath.Base(filename))
