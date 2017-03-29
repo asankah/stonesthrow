@@ -265,13 +265,12 @@ var DefaultHandlers = []CommandHandler{
 		`get a file or multiple files from a build directory.`, `Usage: get [-src|-out] [-n] [-r] path [glob]
 `,
 		func(f *flag.FlagSet) {
-			f.Bool("src", false, "get files from source directory.")
-			f.Bool("out", false, "get files from output directory. this is the default.")
 			f.Bool("n", false, "don't write any files. Just list what would've been transferred.")
 			f.Bool("r", false, "recursively select files that match GLOB")
+			f.String("out", "", "target path. received files will be placed relative to this path.")
 		},
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			srcValue := f.Lookup("src")
+			outValue := f.Lookup("out")
 			nValue := f.Lookup("n")
 			rValue := f.Lookup("r")
 
@@ -281,10 +280,6 @@ var DefaultHandlers = []CommandHandler{
 
 			if f.NArg() > 2 {
 				return NewInvalidArgumentError("too many paths specified")
-			}
-
-			if srcValue.Value.String() == "true" {
-				return NewNothingToDoError("not implemented")
 			}
 
 			rpc_connection, err := conn.GetConnection(ctx)
@@ -308,10 +303,16 @@ var DefaultHandlers = []CommandHandler{
 			if err != nil {
 				return err
 			}
+
+			base_path := outValue.Value.String()
+			if base_path == "" {
+				base_path = filepath.Join(conn.ClientConfig.Repository.SourcePath, conn.ServerConfig.Platform.RelativeBuildPath)
+			}
+			base_path, _ = filepath.Abs(base_path)
 			extractor := FileExtractor{
 				receiver:   stream,
 				sender:     conn.Sink,
-				base_path:  filepath.Join(conn.ClientConfig.Repository.SourcePath, conn.ServerConfig.Platform.RelativeBuildPath),
+				base_path:  base_path,
 				dont_write: nValue.Value.String() == "true"}
 			return conn.Sink.Drain(extractor)
 		}},
