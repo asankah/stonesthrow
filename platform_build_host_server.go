@@ -120,6 +120,11 @@ func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_Ru
 	if ro.GetCommand().GetDirectory() != "" {
 		return NewNothingToDoError("explicit directories are not supported for run")
 	}
+
+	if len(ro.GetCommand().GetCommand()) == 0 {
+		return NewNothingToDoError("no commands specified")
+	}
+
 	if len(ro.GetDependencies().GetTarget()) > 0 {
 		bo := BuildOptions{
 			Platform:        ro.GetPlatform(),
