@@ -48,7 +48,7 @@ func SelectMatchingBranchConfigs(branches []string, branch_configs []*GitReposit
 	return filtered_branches
 }
 
-func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, _ *RepositoryState) (*GitRepositoryInfo, error) {
+func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, co *BranchConfigOptions) (*GitRepositoryInfo, error) {
 	properties := r.Repository.GitConfig.SyncableProperties
 	_, commands := r.GetGitCommandsForJobEventSender(nil)
 	propertySet := make(map[string]bool)
@@ -57,8 +57,17 @@ func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, _ *Repos
 	}
 
 	branchSet := make(map[string]*GitRepositoryInfo_Branch)
+	branch_filter := co.GetBranchSpec()
+	if branch_filter == "" {
+		branch_filter = ".*"
+	}
 
-	allPropertiesString, err := commands.ExecuteNoStream(ctx, "git", "config", "--local", "-z", "--get-regex", "^branch\\..*")
+	branch_config_filter := "^branch\\." + branch_filter + "\\.base-upstream$"
+	if co.GetIncludeGitConfig() {
+		branch_config_filter = "^branch\\." + branch_filter
+	}
+
+	allPropertiesString, err := commands.ExecuteNoStream(ctx, "git", "config", "--local", "-z", "--get-regex", branch_config_filter)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +203,7 @@ func (r *RepositoryHostServerImpl) SetBranchConfig(info *GitRepositoryInfo, s Re
 }
 
 func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s RepositoryHost_PullFromUpstreamServer) error {
-	e, commands := r.GetGitCommandsForJobEventSender(s)
+	_, commands := r.GetGitCommandsForJobEventSender(s)
 
 	if old_branch, err := commands.GitCurrentBranch(s.Context()); err == nil {
 		err = commands.GitCheckoutRevision(s.Context(), "origin/master")
@@ -212,17 +221,14 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 		return nil
 	}
 
-	repo_state, err := GetRepositoryState(s.Context(), r.Repository, e, false)
-	if err != nil {
-		return err
-	}
-
 	remote_repo_client, err := r.GetRepositoryHostPeer(s.Context())
 	if err != nil {
 		return err
 	}
 
-	remote_repo_info, err := remote_repo_client.GetBranchConfig(s.Context(), repo_state)
+	options := BranchConfigOptions{IncludeGitConfig: true}
+
+	remote_repo_info, err := remote_repo_client.GetBranchConfig(s.Context(), &options)
 	if err != nil {
 		return err
 	}
@@ -268,7 +274,8 @@ func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s Repository
 		return err
 	}
 
-	repo_info, err := r.GetBranchConfig(s.Context(), nil)
+	options := BranchConfigOptions{IncludeGitConfig: true}
+	repo_info, err := r.GetBranchConfig(s.Context(), &options)
 	if err != nil {
 		return err
 	}

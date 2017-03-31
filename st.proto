@@ -156,6 +156,11 @@ message FetchFileOptions {
   bool recurse = 3;
 }
 
+message BranchConfigOptions {
+  string branch_spec = 1;
+  bool include_git_config = 2;
+}
+
 service PlatformBuildHost {
   rpc Build(BuildOptions) returns (stream JobEvent);
   rpc Run(RunOptions) returns (stream JobEvent);
@@ -167,7 +172,7 @@ service PlatformBuildHost {
 }
 
 service RepositoryHost {
-  rpc GetBranchConfig(RepositoryState) returns (GitRepositoryInfo);
+  rpc GetBranchConfig(BranchConfigOptions) returns (GitRepositoryInfo);
   rpc SetBranchConfig(GitRepositoryInfo) returns (stream JobEvent);
   rpc PullFromUpstream(BranchList) returns (stream JobEvent);
   rpc PushToUpstream(BranchList) returns (stream JobEvent);

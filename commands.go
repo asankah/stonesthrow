@@ -171,21 +171,35 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 	return subcommands.ExitSuccess
 }
 
+var (
+	Flag_BranchFilter  string
+	Flag_Force         bool
+	Flag_IncludeConfig bool
+	Flag_NoWrite       bool
+	Flag_Out           bool
+	Flag_Recursive     bool
+	Flag_Source        bool
+	Flag_TargetPath    string
+)
+
 var DefaultHandlers = []CommandHandler{
 	{"branch",
 		"repository management",
-		`list local branches.`, "", nil,
+		`list branches.`, `Usage: branch [-c] [branch filter]
+`,
+		func(f *flag.FlagSet) {
+			f.BoolVar(&Flag_IncludeConfig, "c", false, "include branch configuration")
+		},
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			rpc_connection, err := conn.GetConnection(ctx)
 			if err != nil {
 				return err
 			}
 			repo_host_client := NewRepositoryHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
-			if err != nil {
-				return err
-			}
-			repo_info, err := repo_host_client.GetBranchConfig(ctx, repo_state)
+			branch_config_options := BranchConfigOptions{
+				BranchSpec:       Flag_BranchFilter,
+				IncludeGitConfig: Flag_IncludeConfig}
+			repo_info, err := repo_host_client.GetBranchConfig(ctx, &branch_config_options)
 
 			if err != nil {
 				return err
@@ -221,15 +235,12 @@ var DefaultHandlers = []CommandHandler{
 
 `,
 		func(f *flag.FlagSet) {
-			f.Bool("out", false, "clean the output directory.")
-			f.Bool("src", false, "clean the source directory.")
-			f.Bool("force", false,
+			f.BoolVar(&Flag_Out, "out", false, "clean the output directory.")
+			f.BoolVar(&Flag_Source, "src", false, "clean the source directory.")
+			f.BoolVar(&Flag_Force, "force", false,
 				"actually do the cleaning. Without this flag, the command merely lists which files would be affected.")
 		},
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			outValue := f.Lookup("out")
-			forceValue := f.Lookup("force")
-
 			rpc_connection, err := conn.GetConnection(ctx)
 			if err != nil {
 				return err
@@ -245,11 +256,11 @@ var DefaultHandlers = []CommandHandler{
 				Target:          ClobberOptions_SOURCE,
 				Force:           false}
 
-			if outValue.Value.String() == "true" {
+			if Flag_Out {
 				clobber_options.Target = ClobberOptions_OUTPUT
 			}
 
-			if forceValue.Value.String() == "true" {
+			if Flag_Force {
 				clobber_options.Force = true
 			}
 
@@ -265,15 +276,11 @@ var DefaultHandlers = []CommandHandler{
 		`get a file or multiple files from a build directory.`, `Usage: get [-src|-out] [-n] [-r] path [glob]
 `,
 		func(f *flag.FlagSet) {
-			f.Bool("n", false, "don't write any files. Just list what would've been transferred.")
-			f.Bool("r", false, "recursively select files that match GLOB")
-			f.String("out", "", "target path. received files will be placed relative to this path.")
+			f.BoolVar(&Flag_NoWrite, "n", false, "don't write any files. Just list what would've been transferred.")
+			f.BoolVar(&Flag_Recursive, "r", false, "recursively select files that match GLOB")
+			f.StringVar(&Flag_TargetPath, "out", "", "target path. received files will be placed relative to this path.")
 		},
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			outValue := f.Lookup("out")
-			nValue := f.Lookup("n")
-			rValue := f.Lookup("r")
-
 			if f.NArg() == 0 {
 				return NewInvalidArgumentError("no path or glob specified")
 			}
@@ -294,9 +301,7 @@ var DefaultHandlers = []CommandHandler{
 				options.RelativePath = f.Arg(0)
 				options.FilenameGlob = f.Arg(1)
 			}
-			if rValue.Value.String() == "true" {
-				options.Recurse = true
-			}
+			options.Recurse = Flag_Recursive
 
 			builder_client := NewPlatformBuildHostClient(rpc_connection)
 			stream, err := builder_client.FetchFile(ctx, &options)
@@ -304,7 +309,7 @@ var DefaultHandlers = []CommandHandler{
 				return err
 			}
 
-			base_path := outValue.Value.String()
+			base_path := Flag_TargetPath
 			if base_path == "" {
 				base_path = filepath.Join(conn.ClientConfig.Repository.SourcePath, conn.ServerConfig.Platform.RelativeBuildPath)
 			}
@@ -313,7 +318,7 @@ var DefaultHandlers = []CommandHandler{
 				receiver:   stream,
 				sender:     conn.Sink,
 				base_path:  base_path,
-				dont_write: nValue.Value.String() == "true"}
+				dont_write: Flag_NoWrite}
 			return conn.Sink.Drain(extractor)
 		}},
 
