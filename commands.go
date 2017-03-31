@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 )
 
 type FileExtractor struct {
@@ -180,6 +181,7 @@ var (
 	Flag_Recursive     bool
 	Flag_Source        bool
 	Flag_TargetPath    string
+	Flag_TargetList    string
 )
 
 var DefaultHandlers = []CommandHandler{
@@ -228,6 +230,34 @@ var DefaultHandlers = []CommandHandler{
 				return err
 			}
 			return conn.Sink.Drain(build_client)
+		}},
+
+	{"run", "builder",
+		`run a command in the build directory.`, "",
+		func(f *flag.FlagSet) {
+			f.StringVar(&Flag_TargetList, "deps", "", "comma separated list of dependencies that should be built before running command")
+		},
+		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
+			rpc_connection, err := conn.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+			builder_client := NewPlatformBuildHostClient(rpc_connection)
+			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, conn.IsRemote())
+			if err != nil {
+				return err
+			}
+			targets := strings.Split(Flag_TargetList, ",")
+			run_options := RunOptions{
+				Platform:        conn.ServerConfig.Platform.Name,
+				RepositoryState: repo_state,
+				Dependencies:    &TargetList{Target: targets},
+				Command:         &ShellCommand{Command: f.Args()}}
+			event_stream, err := builder_client.Run(ctx, &run_options)
+			if err != nil {
+				return err
+			}
+			return conn.Sink.Drain(event_stream)
 		}},
 
 	{"clobber", "builder",

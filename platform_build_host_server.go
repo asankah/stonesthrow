@@ -117,7 +117,22 @@ func (p *PlatformBuildHostServerImpl) Build(bo *BuildOptions, s PlatformBuildHos
 }
 
 func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_RunServer) error {
-	return NewNothingToDoError("'Run' not implemented")
+	if ro.GetCommand().GetDirectory() != "" {
+		return NewNothingToDoError("explicit directories are not supported for run")
+	}
+	if len(ro.GetDependencies().GetTarget()) > 0 {
+		bo := BuildOptions{
+			Platform:        ro.GetPlatform(),
+			Targets:         ro.GetDependencies().GetTarget(),
+			RepositoryState: ro.GetRepositoryState()}
+		err := p.Build(&bo, s)
+		if err != nil {
+			return err
+		}
+	}
+
+	e := p.GetExecutor(s)
+	return e.ExecutePassthrough(s.Context(), ro.GetCommand().GetCommand()...)
 }
 
 func (p *PlatformBuildHostServerImpl) Clobber(co *ClobberOptions, s PlatformBuildHost_ClobberServer) error {
