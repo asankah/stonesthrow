@@ -110,6 +110,8 @@ func (f *ConsoleFormatter) AddTestFilters() {
 	f.AddPathRemappers()
 	f.AddRegExpReplace(regexp.QuoteMeta("[ RUN      ]")+" ([^ ]*)",
 		"[ "+CActionLabel("RUN")+"      ] "+CSubject("$1"))
+	f.AddRegExpReplace(regexp.QuoteMeta("[       OK ]")+" ([^ ]*)",
+		"[       "+CActionLabel("OK")+" ] "+CSubject("$1"))
 	f.AddRegExpReplace(regexp.QuoteMeta("[  FAILED  ]")+" ([^ ]*)",
 		"[  "+CError("FAILED")+"  ] "+CSubject("$1"))
 	f.AddRegExpReplace(`^(.*)\((.*)\): `,
