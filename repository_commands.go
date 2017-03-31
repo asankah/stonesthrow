@@ -126,8 +126,7 @@ func (r RepositoryCommands) GitCreateBuilderHead(ctx context.Context) (string, e
 }
 
 func (r RepositoryCommands) GitPushBuilderHead(ctx context.Context) error {
-	err := r.GitPush(ctx, []string{"BUILDER_HEAD"})
-	return err
+	return r.GitPush(ctx, []string{"BUILDER_HEAD"})
 }
 
 func (r RepositoryCommands) GitFetchBuilderHead(ctx context.Context) error {

@@ -401,5 +401,5 @@ func GetRepositoryState(ctx context.Context, r *RepositoryConfig, e Executor, pu
 	}
 	return &RepositoryState{
 		Repository: r.Name,
-		Revision:   revision}, nil
+		Revision:   revision}, err
 }
