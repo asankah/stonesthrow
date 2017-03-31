@@ -126,7 +126,7 @@ func (r RepositoryCommands) GitCreateBuilderHead(ctx context.Context) (string, e
 }
 
 func (r RepositoryCommands) GitPushBuilderHead(ctx context.Context) error {
-	return r.GitPush(ctx, []string{"BUILDER_HEAD"})
+	return r.GitPush(ctx, []string{"BUILDER_HEAD"}, true)
 }
 
 func (r RepositoryCommands) GitFetchBuilderHead(ctx context.Context) error {
@@ -156,7 +156,7 @@ func (r RepositoryCommands) branchListToRefspec(ctx context.Context, branches []
 	return refspecs
 }
 
-func (r RepositoryCommands) GitPush(ctx context.Context, branches []string) error {
+func (r RepositoryCommands) GitPush(ctx context.Context, branches []string, force bool) error {
 	if len(branches) == 0 {
 		return NewInvalidArgumentError("No branches specified for 'git push'")
 	}
@@ -165,8 +165,13 @@ func (r RepositoryCommands) GitPush(ctx context.Context, branches []string) erro
 		return NewNoUpstreamError("No upstream configured for repository at %s", r.Repository.SourcePath)
 	}
 
-	command := []string{"git", "push", r.Repository.GitConfig.Remote, "--porcelain", "--thin", "--force-with-lease"}
-	command = append(command, r.branchListToRefspec(ctx, branches, false)...)
+	command := []string{"git", "push", r.Repository.GitConfig.Remote, "--porcelain", "--thin"}
+	if force {
+		command = append(command, "--force")
+	} else {
+		command = append(command, "--force-with-lease")
+	}
+	command = append(command, r.branchListToRefspec(ctx, branches, force)...)
 
 	output, err := r.Execute(ctx, command...)
 	lines := strings.Split(output, "\n")

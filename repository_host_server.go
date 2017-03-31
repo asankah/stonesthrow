@@ -269,7 +269,7 @@ func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s Repository
 	}
 	DrainJobEventPipe(jobevent_receiver, s)
 
-	err = commands.GitPush(s.Context(), branches)
+	err = commands.GitPush(s.Context(), branches, false)
 	if err != nil {
 		return err
 	}
