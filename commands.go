@@ -247,7 +247,10 @@ var DefaultHandlers = []CommandHandler{
 			if err != nil {
 				return err
 			}
-			targets := strings.Split(Flag_TargetList, ",")
+			var targets []string
+			if Flag_TargetList != "" {
+				targets = strings.Split(Flag_TargetList, ",")
+			}
 			run_options := RunOptions{
 				Platform:        conn.ServerConfig.Platform.Name,
 				RepositoryState: repo_state,

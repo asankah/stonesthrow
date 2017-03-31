@@ -99,11 +99,13 @@ func (e JobEventExecutor) execute(ctx context.Context, workdir string, captureSt
 		}()
 	}
 
-	cmd.Start()
-	if e.processAdder != nil {
-		e.processAdder.AddProcess(command, cmd.Process)
+	err = cmd.Start()
+	if err == nil {
+		if e.processAdder != nil {
+			e.processAdder.AddProcess(command, cmd.Process)
+		}
+		err = cmd.Wait()
 	}
-	err = cmd.Wait()
 
 	stderrPipe.Close()
 	<-quitter
