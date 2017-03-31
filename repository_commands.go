@@ -166,7 +166,7 @@ func (r RepositoryCommands) GitPush(ctx context.Context, branches []string) erro
 		return NewNoUpstreamError("No upstream configured for repository at %s", r.Repository.SourcePath)
 	}
 
-	command := []string{"git", "push", r.Repository.GitConfig.Remote, "--porcelain", "--thin", "--force"}
+	command := []string{"git", "push", r.Repository.GitConfig.Remote, "--porcelain", "--thin", "--force-with-lease"}
 	command = append(command, r.branchListToRefspec(ctx, branches, false)...)
 
 	output, err := r.Execute(ctx, command...)
@@ -212,7 +212,9 @@ func (r RepositoryCommands) GitFetch(ctx context.Context, branches []string) err
 		branches = []string{"*"}
 	}
 	command := []string{"git", "fetch", r.Repository.GitConfig.Remote}
-	command = append(command, r.branchListToRefspec(ctx, append(branches, "refs/remotes/origin/master"), true)...)
+	refspecs := r.branchListToRefspec(ctx, append(branches, "refs/remotes/origin/master"), true)
+	refspecs = append(refspecs, "+refs/heads/*:refs/remotes/"+r.Repository.GitConfig.Remote+"/*")
+	command = append(command, refspecs...)
 
 	return r.ExecutePassthrough(ctx, command...)
 }
