@@ -116,14 +116,31 @@ func (p *PlatformBuildHostServerImpl) Build(bo *BuildOptions, s PlatformBuildHos
 	return e.ExecutePassthrough(s.Context(), command...)
 }
 
-func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_RunServer) error {
-	if ro.GetCommand().GetDirectory() != "" {
-		return NewNothingToDoError("explicit directories are not supported for run")
-	}
+func (p *PlatformBuildHostServerImpl) ExpandTokens(in string) string {
+	r := strings.NewReplacer(
+		"{src}", p.Config.Repository.SourcePath,
+		"{out}", p.Config.Platform.BuildPath)
+	return r.Replace(in)
+}
 
+func (p *PlatformBuildHostServerImpl) ExpandTokensInArray(in []string) []string {
+	r := strings.NewReplacer(
+		"{src}", p.Config.Repository.SourcePath,
+		"{out}", p.Config.Platform.BuildPath)
+	out := []string{}
+	for _, s := range in {
+		out = append(out, r.Replace(s))
+	}
+	return out
+}
+
+func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_RunServer) error {
 	if len(ro.GetCommand().GetCommand()) == 0 {
 		return NewNothingToDoError("no commands specified")
 	}
+
+	command := p.ExpandTokensInArray(ro.GetCommand().GetCommand())
+	dir := p.ExpandTokens(ro.GetCommand().GetDirectory())
 
 	if len(ro.GetDependencies().GetTarget()) > 0 {
 		bo := BuildOptions{
@@ -137,7 +154,7 @@ func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_Ru
 	}
 
 	e := p.GetExecutor(s)
-	return e.ExecutePassthrough(s.Context(), ro.GetCommand().GetCommand()...)
+	return e.ExecuteInWorkDirPassthrough(dir, s.Context(), command...)
 }
 
 func (p *PlatformBuildHostServerImpl) Clobber(co *ClobberOptions, s PlatformBuildHost_ClobberServer) error {

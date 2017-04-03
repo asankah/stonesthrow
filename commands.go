@@ -233,9 +233,22 @@ var DefaultHandlers = []CommandHandler{
 		}},
 
 	{"run", "builder",
-		`run a command in the build directory.`, "",
-		func(f *flag.FlagSet) {
+		`run a command in the build directory.`, `Usage: run [-deps=Dependencies] command options ...
+
+The shell command specified by [command] and [options] will be executed in the output directory corresponding to the target platform. The following symbols will be expanded if found:
+
+    {src} : Expands to the full path to the source directory for the repository.
+    {out} : Expands to the full path to hte output directory for the platform.
+
+    The tokens are expanded in the option value for '-dir' in addition to the command specification. Shell globs will not be expanded on the remote side.
+
+    E.g.:
+          run -deps=a,b,c {src}/foo/bar {out}/a
+
+    Builds the targets |a|, |b|, and |c|, and then executes foo/bar relative to the source directory. The only argument to bar is the absolute path to |a| which is assumed to be in the output directory.
+`, func(f *flag.FlagSet) {
 			f.StringVar(&Flag_TargetList, "deps", "", "comma separated list of dependencies that should be built before running command")
+			f.StringVar(&Flag_TargetPath, "dir", "{out}", "directory under which the command should be executed.")
 		},
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			rpc_connection, err := conn.GetConnection(ctx)
@@ -243,7 +256,8 @@ var DefaultHandlers = []CommandHandler{
 				return err
 			}
 			builder_client := NewPlatformBuildHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, conn.IsRemote())
+			repo_state, err := GetRepositoryState(
+				ctx, conn.ClientConfig.Repository, conn.Executor, conn.IsRemote())
 			if err != nil {
 				return err
 			}
@@ -255,7 +269,9 @@ var DefaultHandlers = []CommandHandler{
 				Platform:        conn.ServerConfig.Platform.Name,
 				RepositoryState: repo_state,
 				Dependencies:    &TargetList{Target: targets},
-				Command:         &ShellCommand{Command: f.Args()}}
+				Command: &ShellCommand{
+					Directory: Flag_TargetPath,
+					Command:   f.Args()}}
 			event_stream, err := builder_client.Run(ctx, &run_options)
 			if err != nil {
 				return err
