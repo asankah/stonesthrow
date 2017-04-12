@@ -15,4 +15,6 @@ var (
 	CSourceBuildStep = ansi.ColorFunc("34")
 	CAuxBuildStep    = ansi.ColorFunc("214")
 	CActionLabel     = ansi.ColorFunc("34")
+
+	CTestString = CError("Error") + CSucceeded("Succeeded") + CInfo("Info") + CDark("Dark") + CTitle("Title") + CSubject("Subject") + CLocation("Location") + CSourceBuildStep("CSourceBuildStep") + CAuxBuildStep("CAuxBuildStep") + CActionLabel("CActionLabel")
 )

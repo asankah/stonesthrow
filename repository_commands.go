@@ -53,6 +53,22 @@ func (r RepositoryCommands) GitTreeForRevision(ctx context.Context, name string)
 	}
 }
 
+func (r RepositoryCommands) GitListLocalBranches(ctx context.Context) ([]string, error) {
+	branches := []string{}
+	output, err := r.Execute(ctx, "git", "branch", "--list")
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "* ") {
+			branches = append(branches, line[2:])
+		} else {
+			return nil, fmt.Errorf("unexpected format for 'git branch --list' output")
+		}
+	}
+	return branches, nil
+}
+
 // GitCreateWorkTree takes a snapshot of the working set of files, and returns a Git tree ID.
 func (r RepositoryCommands) GitCreateWorkTree(ctx context.Context) (string, error) {
 	status, err := r.GitStatus(ctx)

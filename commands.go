@@ -173,15 +173,16 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 }
 
 var (
-	Flag_BranchFilter  string
-	Flag_Force         bool
-	Flag_IncludeConfig bool
-	Flag_NoWrite       bool
-	Flag_Out           bool
-	Flag_Recursive     bool
-	Flag_Source        bool
-	Flag_TargetPath    string
-	Flag_TargetList    string
+	Flag_BranchFilter          string
+	Flag_Force                 bool
+	Flag_IncludeConfig         bool
+	Flag_NoWrite               bool
+	Flag_Out                   bool
+	Flag_Recursive             bool
+	Flag_Source                bool
+	Flag_TargetPath            string
+	Flag_TargetList            string
+	Flag_AutomaticDependencies bool
 )
 
 var DefaultHandlers = []CommandHandler{
@@ -245,10 +246,23 @@ The shell command specified by [command] and [options] will be executed in the o
     E.g.:
           run -deps=a,b,c {src}/foo/bar {out}/a
 
-    Builds the targets |a|, |b|, and |c|, and then executes foo/bar relative to the source directory. The only argument to bar is the absolute path to |a| which is assumed to be in the output directory.
+    ... builds the targets |a|, |b|, and |c|, and then executes foo/bar relative to the source directory. The only argument to bar is the absolute path to |a| which is assumed to be in the output directory.
+
+    If the executable to be invoked is in the output directory, then by default the builder assumes that the executable should be rebuilt before execution.
+    E.g.:
+          run ./foo
+    
+    ... builds and runs |foo|.
+
+    To suppress this behavior, specify -autodeps=false.
+    E.g.:
+          run -autodeps=false ./foo
+
+    ... runs |foo| without attempting to build it.
 `, func(f *flag.FlagSet) {
 			f.StringVar(&Flag_TargetList, "deps", "", "comma separated list of dependencies that should be built before running command")
 			f.StringVar(&Flag_TargetPath, "dir", "{out}", "directory under which the command should be executed.")
+			f.BoolVar(&Flag_AutomaticDependencies, "autodeps", true, "determine dependencies automatically")
 		},
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			rpc_connection, err := conn.GetConnection(ctx)
@@ -271,7 +285,8 @@ The shell command specified by [command] and [options] will be executed in the o
 				Dependencies:    &TargetList{Target: targets},
 				Command: &ShellCommand{
 					Directory: Flag_TargetPath,
-					Command:   f.Args()}}
+					Command:   f.Args()},
+				AutomaticDependencies: Flag_AutomaticDependencies}
 			event_stream, err := builder_client.Run(ctx, &run_options)
 			if err != nil {
 				return err

@@ -323,12 +323,5 @@ func (f *ConsoleFormatter) Send(je *stonesthrow.JobEvent) error {
 }
 
 func WriteTestString() {
-	fmt.Println(CError("Error") +
-		CInfo("Info") +
-		CDark("Dark") +
-		CTitle("Title") +
-		CSubject("Subject") +
-		CLocation("Location") +
-		CSourceBuildStep("CSourceBuildStep") +
-		CAuxBuildStep("CAuxBuildStep"))
+	fmt.Println(CTestString)
 }

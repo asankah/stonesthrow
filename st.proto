@@ -129,6 +129,7 @@ message RunOptions {
   RepositoryState repository_state = 2;
   TargetList dependencies = 3;
   ShellCommand command = 4;
+  bool automatic_dependencies = 5;
 }
 
 message ClobberOptions {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -134,6 +135,26 @@ func (p *PlatformBuildHostServerImpl) ExpandTokensInArray(in []string) []string 
 	return out
 }
 
+func (p *PlatformBuildHostServerImpl) GetDependenciesFromCommand(command []string, dir string) []string {
+	if len(command) == 0 {
+		return nil
+	}
+
+	var command_path string
+
+	if filepath.IsAbs(command[0]) {
+		command_path = command[0]
+	} else {
+		command_path = filepath.Join(dir, command[0])
+	}
+
+	if filepath.Dir(command_path) != p.Config.GetBuildPath() {
+		return nil
+	}
+
+	return []string{filepath.Base(command_path)}
+}
+
 func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_RunServer) error {
 	if len(ro.GetCommand().GetCommand()) == 0 {
 		return NewNothingToDoError("no commands specified")
@@ -142,10 +163,16 @@ func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_Ru
 	command := p.ExpandTokensInArray(ro.GetCommand().GetCommand())
 	dir := p.ExpandTokens(ro.GetCommand().GetDirectory())
 
-	if len(ro.GetDependencies().GetTarget()) > 0 {
+	build_targets := ro.GetDependencies().GetTarget()
+
+	if ro.GetAutomaticDependencies() {
+		command = append(command, p.GetDependenciesFromCommand(command, dir)...)
+	}
+
+	if len(build_targets) > 0 {
 		bo := BuildOptions{
 			Platform:        ro.GetPlatform(),
-			Targets:         ro.GetDependencies().GetTarget(),
+			Targets:         build_targets,
 			RepositoryState: ro.GetRepositoryState()}
 		err := p.Build(&bo, s)
 		if err != nil {

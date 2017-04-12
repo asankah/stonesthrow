@@ -212,11 +212,6 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 		}
 	}
 
-	err := commands.GitFetch(s.Context(), list.GetBranch())
-	if err != nil {
-		return err
-	}
-
 	if r.Repository.GitConfig.RemoteHost == nil {
 		return nil
 	}
@@ -232,8 +227,19 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 	if err != nil {
 		return err
 	}
-
 	remote_repo_info.Branches = SelectMatchingBranchConfigs(list.GetBranch(), remote_repo_info.GetBranches())
+
+	local_repo_info, err := r.GetBranchConfig(s.Context(), &options)
+	if err != nil {
+		return err
+	}
+	local_repo_info.Branches = SelectMatchingBranchConfigs(list.GetBranch(), local_repo_info.GetBranches())
+
+	err = commands.GitFetch(s.Context(), list.GetBranch())
+	if err != nil {
+		return err
+	}
+
 	return r.SetBranchConfig(remote_repo_info, s)
 }
 
@@ -340,6 +346,7 @@ func (r *RepositoryHostServerImpl) RebaseUpdate(rs *RepositoryState, s Repositor
 	if status.HasUnmerged {
 		return NewUnmergedChangesExistError("can't rebase-update with dirty tree")
 	}
+	// Store the known revisions in gitconfig before starting a rebase operation.
 
 	previousHead, _ := commands.GitCurrentBranch(s.Context())
 
