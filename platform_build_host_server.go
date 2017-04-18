@@ -144,8 +144,12 @@ func (p *PlatformBuildHostServerImpl) GetDependenciesFromCommand(command []strin
 
 	if filepath.IsAbs(command[0]) {
 		command_path = command[0]
-	} else {
+	} else if strings.ContainsAny(command[0], "/\\") {
 		command_path = filepath.Join(dir, command[0])
+	} else {
+		// Otherwise the executable is getting picked up from PATH and
+		// is unlikely to be a build artifact.
+		return nil
 	}
 
 	if filepath.Dir(command_path) != p.Config.GetBuildPath() {
@@ -166,7 +170,7 @@ func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_Ru
 	build_targets := ro.GetDependencies().GetTarget()
 
 	if ro.GetAutomaticDependencies() {
-		command = append(command, p.GetDependenciesFromCommand(command, dir)...)
+		build_targets = append(build_targets, p.GetDependenciesFromCommand(command, dir)...)
 	}
 
 	if len(build_targets) > 0 {

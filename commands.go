@@ -270,14 +270,15 @@ The shell command specified by [command] and [options] will be executed in the o
 				return err
 			}
 			builder_client := NewPlatformBuildHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(
-				ctx, conn.ClientConfig.Repository, conn.Executor, conn.IsRemote())
-			if err != nil {
-				return err
-			}
 			var targets []string
 			if Flag_TargetList != "" {
 				targets = strings.Split(Flag_TargetList, ",")
+			}
+			needs_repo_state := (len(targets) > 0 || Flag_AutomaticDependencies)
+			repo_state, err := GetRepositoryState(
+				ctx, conn.ClientConfig.Repository, conn.Executor, conn.IsRemote() && needs_repo_state)
+			if err != nil {
+				return err
 			}
 			run_options := RunOptions{
 				Platform:        conn.ServerConfig.Platform.Name,
