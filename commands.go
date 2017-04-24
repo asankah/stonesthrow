@@ -239,7 +239,7 @@ var DefaultHandlers = []CommandHandler{
 The shell command specified by [command] and [options] will be executed in the output directory corresponding to the target platform. The following symbols will be expanded if found:
 
     {src} : Expands to the full path to the source directory for the repository.
-    {out} : Expands to the full path to hte output directory for the platform.
+    {out} : Expands to the full path to the output directory for the platform.
 
     The tokens are expanded in the option value for '-dir' in addition to the command specification. Shell globs will not be expanded on the remote side.
 

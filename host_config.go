@@ -23,6 +23,7 @@ type HostConfig struct {
 	MaxBuildJobs    int                               `json:"max_build_jobs,omitempty"`
 	Remotes         map[string]*RemoteTransportConfig `json:"remotes,omitempty"`
 	Certificates    *CertificateConfig                `json:"certificates,omitempty"`
+	ScriptPath      string                            `json:"scripts"`
 
 	Name              string            `json:"-"`
 	DefaultRepository *RepositoryConfig `json:"-"`
@@ -103,4 +104,8 @@ func (h *HostConfig) IsSameHost(hostname string) bool {
 	}
 
 	return false
+}
+
+func (h *HostConfig) GetScriptPath() string {
+	return h.ScriptPath
 }

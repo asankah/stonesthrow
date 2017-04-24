@@ -1,6 +1,7 @@
 package stonesthrow
 
 import (
+	"encoding/json"
 	"fmt"
 	"golang.org/x/net/context"
 	"os"
@@ -15,6 +16,22 @@ import (
 type PlatformBuildHostServerImpl struct {
 	Config       Config
 	ProcessAdder ProcessAdder
+	ScriptRunner ScriptRunner
+}
+
+type PlatformBuildPassthroughConfig struct {
+	SourcePath     string `json:"source_path"`
+	BuildPath      string `json:"build_path"`
+	PlatformName   string `json:"platform_name"`
+	RepositoryName string `json:"repository_name"`
+}
+
+func (p PlatformBuildPassthroughConfig) AsJson() string {
+	bytes, err := json.Marshal(p)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
 }
 
 func (p *PlatformBuildHostServerImpl) GetExecutor(s JobEventSender) Executor {
@@ -23,6 +40,24 @@ func (p *PlatformBuildHostServerImpl) GetExecutor(s JobEventSender) Executor {
 
 func (p *PlatformBuildHostServerImpl) GetRepositoryHostServer() *RepositoryHostServerImpl {
 	return &RepositoryHostServerImpl{Repository: p.Config.Repository, ProcessAdder: p.ProcessAdder}
+}
+
+func (p *PlatformBuildHostServerImpl) GetScriptRunner() *ScriptRunner {
+	if p.ScriptRunner.Executor != nil {
+		return &p.ScriptRunner
+	}
+
+	p.ScriptRunner = ScriptRunner{
+		ScriptPath:      Config.Repository.ScriptPath,
+		ScriptName:      Config.Repository.ScriptPath,
+		StonesthrowPath: Config.Host.StonesthrowPath,
+		Config: PlatformBuildPassthroughConfig{
+			SourcePath:     Config.Repository.SourcePath,
+			BuildPath:      Config.Platform.BuildPath,
+			PlatformName:   Config.Platform.Name,
+			RepositoryName: Config.Repository.Name}}
+
+	return &p.ScriptRunner
 }
 
 func (p *PlatformBuildHostServerImpl) IsGomaRunning(ctx context.Context, e Executor, goma_command ...string) bool {
@@ -117,22 +152,26 @@ func (p *PlatformBuildHostServerImpl) Build(bo *BuildOptions, s PlatformBuildHos
 	return e.ExecutePassthrough(s.Context(), command...)
 }
 
-func (p *PlatformBuildHostServerImpl) ExpandTokens(in string) string {
-	r := strings.NewReplacer(
+func (p *PlatformBuildHostServerImpl) GetTokenReplacer() strings.Replacer {
+	return strings.NewReplacer(
 		"{src}", p.Config.Repository.SourcePath,
-		"{out}", p.Config.Platform.BuildPath)
-	return r.Replace(in)
+		"{out}", p.Config.Platform.BuildPath,
+		"{st}", p.Config.Host.StonesthrowPath)
+}
+func (p *PlatformBuildHostServerImpl) ExpandTokens(in string) string {
+	return p.GetTokenReplacer().Replace(in)
 }
 
 func (p *PlatformBuildHostServerImpl) ExpandTokensInArray(in []string) []string {
-	r := strings.NewReplacer(
-		"{src}", p.Config.Repository.SourcePath,
-		"{out}", p.Config.Platform.BuildPath)
+	r := p.GetTokenReplacer()
 	out := []string{}
 	for _, s := range in {
 		out = append(out, r.Replace(s))
 	}
 	return out
+}
+
+func (p *PlatformBuildHostServerImpl) RunScript(ro *RunOptions, s PlatformBuildHost_RunServer) error {
 }
 
 func (p *PlatformBuildHostServerImpl) GetDependenciesFromCommand(command []string, dir string) []string {

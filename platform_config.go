@@ -69,7 +69,7 @@ func (p *PlatformConfig) Validate() error {
 		return fmt.Errorf("RelativeBuildPath invalid for %s", p.Name)
 	}
 	if p.MbConfigName == "" {
-		return fmt.Errorf("MbConfigName not defiend for %s", p.Name)
+		return fmt.Errorf("MbConfigName not defined for %s", p.Name)
 	}
 	if p.Name == "" || p.Repository == nil || p.BuildPath == "" {
 		return fmt.Errorf("Platform not normalized")

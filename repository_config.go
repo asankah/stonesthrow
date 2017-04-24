@@ -18,6 +18,7 @@ type RepositoryConfig struct {
 	SourcePath string                     `json:"src"`
 	Platforms  map[string]*PlatformConfig `json:"platforms"`
 	GitConfig  RepositoryGitConfig        `json:"git"`
+	ScriptPath string                     `json:"script"`
 
 	Name string      `json:"-"`
 	Host *HostConfig `json:"-"`
@@ -53,6 +54,10 @@ func (r *RepositoryConfig) Normalize(name string, host_config *HostConfig) error
 					r.Host.Name, r.Name)
 			}
 			r.GitConfig.SyncableProperties = template_repo.GitConfig.SyncableProperties
+
+			if r.ScriptPath == "" {
+				r.ScriptPath = template_repo.ScriptPath
+			}
 		}
 	}
 	return r.Validate()
