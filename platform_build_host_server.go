@@ -26,6 +26,7 @@ type PlatformBuildPassthroughConfig struct {
 	PlatformName   string `json:"platform_name"`
 	RepositoryName string `json:"repository_name"`
 	GomaPath       string `json:"goma_path"`
+	MaxBuildJobs   int    `json:"max_build_jobs"`
 }
 
 func (p PlatformBuildPassthroughConfig) AsJson() string {
@@ -65,7 +66,8 @@ func (p *PlatformBuildHostServerImpl) GetScript() (*Script, error) {
 			BuildPath:      p.Config.Platform.BuildPath,
 			PlatformName:   p.Config.Platform.Name,
 			RepositoryName: p.Config.Repository.Name,
-			GomaPath:       p.Config.Host.GomaPath}}
+			GomaPath:       p.Config.Host.GomaPath,
+			MaxBuildJobs:   p.Config.Host.MaxBuildJobs}}
 
 	return &p.Script, nil
 }
@@ -181,7 +183,7 @@ func (p *PlatformBuildHostServerImpl) ExpandTokensInArray(in []string) []string 
 	return out
 }
 
-func (p *PlatformBuildHostServerImpl) RunScript(ro *RunOptions, s PlatformBuildHost_RunServer) error {
+func (p *PlatformBuildHostServerImpl) RunScript(ro *RunOptions, s JobEventSender) error {
 	e := p.GetExecutor(s)
 	script, err := p.GetScript()
 	if err != nil {
@@ -196,7 +198,7 @@ func (p *PlatformBuildHostServerImpl) RunScript(ro *RunOptions, s PlatformBuildH
 		p.ExpandTokensInArray(ro.GetCommand().GetCommand())...)
 }
 
-func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_RunServer) error {
+func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s JobEventSender) error {
 	return p.RunScript(ro, s)
 }
 
@@ -224,7 +226,7 @@ func (p *PlatformBuildHostServerImpl) GetDependenciesFromCommand(command []strin
 	return []string{filepath.Base(command_path)}
 }
 
-func (p *PlatformBuildHostServerImpl) RunCommand(ro *RunOptions, s PlatformBuildHost_RunServer) error {
+func (p *PlatformBuildHostServerImpl) RunCommand(ro *RunOptions, s JobEventSender) error {
 	if len(ro.GetCommand().GetCommand()) == 0 {
 		return NewNothingToDoError("no commands specified")
 	}

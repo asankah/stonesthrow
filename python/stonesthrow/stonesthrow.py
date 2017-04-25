@@ -24,34 +24,54 @@ class Options(object):
 #     raise RuntimeError('Not implemented')
 # 
 
-def NotifyStartProcess(*args):
-    o = { "cmdline": args }
-    sys.stdout.write("@@@BeginCommand:{json}@@@\n".format(json=json.dumps(o)))
+def WriteControlData(data):
+    sys.stdout.write("\n")
+    sys.stdout.write(data)
+    sys.stdout.write("\n")
+    sys.stdout.flush()
 
-def NotifyEndProcess(succeeded=True):
-    o = { "result": succeeded }
-    sys.stdout.write("@@@EndCommand:{json}@@@\n".format(json=json.dumps(o)))
+def NotifyStartProcess(args, directory):
+    o = {"begin_command_event": { "command": {"command": args, "directory": directory }}}
+    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
+
+def NotifyEndProcess(return_code=0):
+    o = {"end_command_event": { "return_code": return_code }}
+    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
+
+def Debug(message):
+    o = { "log_event": { "msg": message , "severity": 2}}
+    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
+
+def Info(message):
+    o = { "log_event": { "msg": message , "severity": 1}}
+    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
+
+def Error(message):
+    o = { "log_event": { "msg": message , "severity": 0}}
+    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
 
 def CheckCall(*args, **kwargs):
-    succeeded = True
+    return_code = 0
     rv = None
     try:
-        NotifyStartProcess(args)
+        NotifyStartProcess(args[0], os.getcwd())
         rv = subprocess.check_call(*args, **kwargs)
-    except Exeception as e:
-        succeeded = False
+    except subprocess.CalledProcessError as e:
+        return_code = e.returncode
+    except Exception as e:
+        return_code = -1
         raise e
     finally:
-        NotifyEndProcess(succeeded)
+        NotifyEndProcess(return_code)
     return rv
 
 def CheckOutput(*args, **kwargs):
     succeeded = True
     rv = None
     try:
-        NotifyStartProcess(args)
+        NotifyStartProcess(args[0])
         rv = subprocess.check_output(*args, **kwargs)
-    except Exeception as e:
+    except Exception as e:
         succeeded = False
         raise e
     finally:
