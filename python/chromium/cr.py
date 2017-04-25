@@ -1,5 +1,7 @@
 import stonesthrow
 import argparse
+import os
+import platform
 
 def with_arg(*args, **kwargs):
     def wrap(func):
@@ -10,6 +12,21 @@ def with_arg(*args, **kwargs):
     return wrap
 
 class Commands:
+
+    @staticmethod
+    def run_mb(options, *args):
+        if len(args) == 0 or not isinstance(options, stonesthrow.Options):
+            raise ValueError("first argument should be an Options object")
+        if platform.system() == "Windows":
+            mb_tool = os.path.join(options.source_path, "tools", "mb", "mb.bat")
+        else:
+            mb_tool = os.path.join(options.source_path, "tools", "mb", "mb.py")
+        command = [mb_tool, args[0], "-c", options.mb_config, "-g", options.goma_path, options.build_path] + list(args[1:])
+        stonesthrow.CheckCall(command)
+
+    def prepare_command(options):
+        """Prepare build directory"""
+        Commands.run_mb(options, "gen")
 
     @with_arg('targets', nargs=argparse.REMAINDER, metavar='TARGETS', help='targets to build')
     def build_command(options):

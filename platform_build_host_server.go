@@ -16,14 +16,16 @@ import (
 type PlatformBuildHostServerImpl struct {
 	Config       Config
 	ProcessAdder ProcessAdder
-	ScriptRunner ScriptRunner
+	Script       Script
 }
 
 type PlatformBuildPassthroughConfig struct {
+	PlatformConfig
 	SourcePath     string `json:"source_path"`
 	BuildPath      string `json:"build_path"`
 	PlatformName   string `json:"platform_name"`
 	RepositoryName string `json:"repository_name"`
+	GomaPath       string `json:"goma_path"`
 }
 
 func (p PlatformBuildPassthroughConfig) AsJson() string {
@@ -42,22 +44,30 @@ func (p *PlatformBuildHostServerImpl) GetRepositoryHostServer() *RepositoryHostS
 	return &RepositoryHostServerImpl{Repository: p.Config.Repository, ProcessAdder: p.ProcessAdder}
 }
 
-func (p *PlatformBuildHostServerImpl) GetScriptRunner() *ScriptRunner {
-	if p.ScriptRunner.Executor != nil {
-		return &p.ScriptRunner
+func (p *PlatformBuildHostServerImpl) GetScript() (*Script, error) {
+	if p.Script.ScriptName != "" {
+		return &p.Script, nil
 	}
 
-	p.ScriptRunner = ScriptRunner{
-		ScriptPath:      Config.Repository.ScriptPath,
-		ScriptName:      Config.Repository.ScriptPath,
-		StonesthrowPath: Config.Host.StonesthrowPath,
-		Config: PlatformBuildPassthroughConfig{
-			SourcePath:     Config.Repository.SourcePath,
-			BuildPath:      Config.Platform.BuildPath,
-			PlatformName:   Config.Platform.Name,
-			RepositoryName: Config.Repository.Name}}
+	r := p.GetTokenReplacer()
+	script_path := r.Replace(p.Config.Repository.ScriptPath)
+	if script_path == "" {
+		return nil, NewInvalidArgumentError("script path not defined")
+	}
 
-	return &p.ScriptRunner
+	p.Script = Script{
+		ScriptPath:      filepath.Dir(script_path),
+		ScriptName:      filepath.Base(script_path),
+		StonesthrowPath: p.Config.Host.StonesthrowPath,
+		Config: PlatformBuildPassthroughConfig{
+			PlatformConfig: *p.Config.Platform,
+			SourcePath:     p.Config.Repository.SourcePath,
+			BuildPath:      p.Config.Platform.BuildPath,
+			PlatformName:   p.Config.Platform.Name,
+			RepositoryName: p.Config.Repository.Name,
+			GomaPath:       p.Config.Host.GomaPath}}
+
+	return &p.Script, nil
 }
 
 func (p *PlatformBuildHostServerImpl) IsGomaRunning(ctx context.Context, e Executor, goma_command ...string) bool {
@@ -152,7 +162,7 @@ func (p *PlatformBuildHostServerImpl) Build(bo *BuildOptions, s PlatformBuildHos
 	return e.ExecutePassthrough(s.Context(), command...)
 }
 
-func (p *PlatformBuildHostServerImpl) GetTokenReplacer() strings.Replacer {
+func (p *PlatformBuildHostServerImpl) GetTokenReplacer() *strings.Replacer {
 	return strings.NewReplacer(
 		"{src}", p.Config.Repository.SourcePath,
 		"{out}", p.Config.Platform.BuildPath,
@@ -172,6 +182,22 @@ func (p *PlatformBuildHostServerImpl) ExpandTokensInArray(in []string) []string 
 }
 
 func (p *PlatformBuildHostServerImpl) RunScript(ro *RunOptions, s PlatformBuildHost_RunServer) error {
+	e := p.GetExecutor(s)
+	script, err := p.GetScript()
+	if err != nil {
+		return err
+	}
+
+	runner := script.GetScriptRunner(e)
+
+	return runner.ExecuteInWorkDirPassthrough(
+		p.ExpandTokens(ro.GetCommand().GetDirectory()),
+		s.Context(),
+		p.ExpandTokensInArray(ro.GetCommand().GetCommand())...)
+}
+
+func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_RunServer) error {
+	return p.RunScript(ro, s)
 }
 
 func (p *PlatformBuildHostServerImpl) GetDependenciesFromCommand(command []string, dir string) []string {
@@ -198,7 +224,7 @@ func (p *PlatformBuildHostServerImpl) GetDependenciesFromCommand(command []strin
 	return []string{filepath.Base(command_path)}
 }
 
-func (p *PlatformBuildHostServerImpl) Run(ro *RunOptions, s PlatformBuildHost_RunServer) error {
+func (p *PlatformBuildHostServerImpl) RunCommand(ro *RunOptions, s PlatformBuildHost_RunServer) error {
 	if len(ro.GetCommand().GetCommand()) == 0 {
 		return NewNothingToDoError("no commands specified")
 	}

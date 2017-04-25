@@ -3,8 +3,6 @@ package stonesthrow
 import (
 	"context"
 	"os"
-	"os/exec"
-	"path"
 	"path/filepath"
 )
 
@@ -33,14 +31,26 @@ type ScriptRunner struct {
 	Executor Executor
 }
 
-func (s ScriptRunner) ExecutePassthrough(ctx context.Context, args ...string) error {
-	if len(args) == 0 {
-		return NewInvalidArgumentError("Need script name")
-	}
+func (s Script) GetScriptRunner(e Executor) ScriptRunner {
+	return ScriptRunner{
+		Script{
+			ScriptPath:      s.ScriptPath,
+			ScriptName:      s.ScriptName,
+			StonesthrowPath: s.StonesthrowPath,
+			Config:          s.Config}, e}
+}
 
+func (s ScriptRunner) ExecutePassthrough(ctx context.Context, args ...string) error {
+	return s.ExecuteInWorkDirPassthrough(s.ScriptPath, ctx, args...)
+}
+
+func (s ScriptRunner) ExecuteInWorkDirPassthrough(work_dir string, ctx context.Context, args ...string) error {
+	if s.ScriptPath == "" || s.ScriptName == "" || s.Executor == nil || s.StonesthrowPath == "" {
+		return NewConfigIncompleteError("script configuration incomplete")
+	}
 	if _, err := os.Stat(s.ScriptPath); os.IsNotExist(err) {
 		return err
 	}
 
-	return Executor.ExecutePassthrough(ctx, append(s.GetScriptRunnerCommand(), args)...)
+	return s.Executor.ExecuteInWorkDirPassthrough(work_dir, ctx, append(s.GetScriptRunnerCommand(), args...)...)
 }

@@ -105,7 +105,3 @@ func (h *HostConfig) IsSameHost(hostname string) bool {
 
 	return false
 }
-
-func (h *HostConfig) GetScriptPath() string {
-	return h.ScriptPath
-}
