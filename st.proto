@@ -110,16 +110,6 @@ message JobEvent {
   ZippedContentEvent zipped_content = 7;
 }
 
-message BuildOptions {
-  string platform = 1;
-  repeated string targets = 2;
-  RepositoryState repository_state = 3;
-}
-
-message TargetList {
-  repeated string target = 1;
-}
-
 message BranchList {
   repeated string branch = 1;
 }
@@ -129,18 +119,6 @@ message RunOptions {
   RepositoryState repository_state = 2;
   TargetList dependencies = 3;
   ShellCommand command = 4;
-  bool automatic_dependencies = 5;
-}
-
-message ClobberOptions {
-  enum Target {
-    SOURCE = 0;
-    OUTPUT =1;
-  }
-  string platform = 1;
-  RepositoryState repository_state = 2;
-  Target target = 3;
-  bool force = 4;
 }
 
 message PingOptions {
@@ -162,13 +140,32 @@ message BranchConfigOptions {
   bool include_git_config = 2;
 }
 
+message ListCommandsOptions {
+}
+
+message Command {
+  repeated string name = 1;
+  string description = 2;
+  string usage = 3;
+  bool depends_on_source = 4;
+  bool visible = 5;
+}
+
+message CommandList {
+  repeated Command command = 1;
+}
+
+message ListTargetsOptions {
+}
+
+message TargetList {
+  repeated string target = 1;
+}
+
 service PlatformBuildHost {
-  rpc Build(BuildOptions) returns (stream JobEvent);
-  rpc Run(RunOptions) returns (stream JobEvent);
-  rpc Clobber(ClobberOptions) returns (stream JobEvent);
-  rpc Clean(BuildOptions) returns (stream JobEvent);
-  rpc Prepare(BuildOptions) returns (stream JobEvent);
-  rpc ListTargets(BuildOptions) returns (TargetList);
+  rpc RunCommand(RunOptions) returns (stream JobEvent);
+  rpc ListCommands(ListCommandsOptions) returns (CommandList);
+  rpc ListTargets(ListTargetsOptions) returns (TargetList);
   rpc FetchFile(FetchFileOptions) returns (stream JobEvent);
 }
 
@@ -181,7 +178,6 @@ service RepositoryHost {
   rpc SyncLocal(RepositoryState) returns (stream JobEvent);
   rpc SyncRemote(RepositoryState) returns (stream JobEvent);
   rpc PrepareForReceive(RepositoryState) returns (stream JobEvent);
-  rpc RebaseUpdate(RepositoryState) returns (stream JobEvent);
   rpc FetchFile(FetchFileOptions) returns (stream JobEvent);
 }
 

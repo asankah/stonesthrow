@@ -17,6 +17,7 @@ def ConfigureCommonArgs(parser):
     
     parser.add_argument('--module', type=str, action='store', metavar='MODULE_NAME', help='module name to load.')
     parser.add_argument('--sys_path', type=str, action='append', metavar='PATH', help='path to append to sys.path. Can be specified more than once.')
+    parser.add_argument('--verify_source_needed', action='store_true', help='don\'t run the command. just determine if running the command requires synchronizing source state')
     parser.add_argument('args', metavar='ARGS', nargs=argparse.REMAINDER)
 
 def LoadModule(options):
@@ -42,16 +43,20 @@ def Main(args):
     parser = argparse.ArgumentParser(description='Python script host for Stonesthrow', add_help=False)
     ConfigureCommonArgs(parser)
 
-    options = parser.parse_args(args, namespace=Options())
-    if not options:
+    host_options = parser.parse_args(args, namespace=Options())
+    if not host_options:
         return
 
-    module = LoadModule(options)
-    config = ParseConfig(options)
+    module = LoadModule(host_options)
+    config = ParseConfig(host_options)
 
-    child_parser = module.ConfigureFlags(options)
-    child_options = child_parser.parse_args(options.args, namespace=Options())
+    child_parser = module.ConfigureFlags(host_options)
+    child_options = child_parser.parse_args(host_options.args, namespace=Options())
     child_options.__dict__.update(config)
+
+    if host_options.verify_source_needed:
+        sys.stdout.write(json.dumps({"result": module.NeedsSource(child_options)}))
+        return
 
     module.Run(child_options)
 

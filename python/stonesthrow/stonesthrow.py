@@ -67,7 +67,10 @@ def CheckCall(*args, **kwargs):
 
 def CheckOutput(*args, **kwargs):
     succeeded = True
-    rv = None
+    rv = ''
+    if 'universal_newlines' not in kwargs.keys():
+        kwargs['universal_newlines'] = True
+
     try:
         NotifyStartProcess(args[0])
         rv = subprocess.check_output(*args, **kwargs)
