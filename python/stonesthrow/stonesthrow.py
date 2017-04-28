@@ -66,18 +66,19 @@ def CheckCall(*args, **kwargs):
     return rv
 
 def CheckOutput(*args, **kwargs):
-    succeeded = True
+    return_code = 0
     rv = ''
     if 'universal_newlines' not in kwargs.keys():
         kwargs['universal_newlines'] = True
+    directory = os.getcwd() if 'cwd' not in kwargs else kwargs['cwd']
 
     try:
-        NotifyStartProcess(args[0])
+        NotifyStartProcess(args[0], directory)
         rv = subprocess.check_output(*args, **kwargs)
     except Exception as e:
-        succeeded = False
+        return_code = 1
         raise e
     finally:
-        NotifyEndProcess(succeeded)
+        NotifyEndProcess(return_code)
     return rv
 

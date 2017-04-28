@@ -190,23 +190,34 @@ class Commands:
 
         stonesthrow.CheckCall(options.args, cwd=options.build_path)
 
-
     def RebaseUpdate_Command(self, options):
         """runs 'git rebase-update'."""
 
         clank_dir = os.path.join(options.source_path, "clank")
         if os.path.exists(clank_dir):
-            stonesthrow.CheckCall(['git', 'checkout', 'origin/master'], cwd=clank_dir)
-            stonesthrow.CheckCall(['git', 'pull', 'origin', 'master'], cwd=clank_dir)
+            stonesthrow.CheckCall(
+                ['git', 'checkout', 'origin/master'], cwd=clank_dir)
+            stonesthrow.CheckCall(
+                ['git', 'pull', 'origin', 'master'], cwd=clank_dir)
 
         chrome_dir = options.source_path
-        stonesthrow.CheckCall(['git', 'checkout', 'origin/master'], cwd=chrome_dir)
-        stonesthrow.CheckCall(['git', 'checkout', 'origin', 'master'], cwd=chrome_dir)
+        stonesthrow.CheckCall(
+            ['git', 'checkout', 'origin/master'], cwd=chrome_dir)
+        stonesthrow.CheckCall(
+            ['git', 'checkout', 'origin', 'master'], cwd=chrome_dir)
 
         stonesthrow.CheckCall(['gclient', 'sync'], cwd=chrome_dir)
 
         stonesthrow.CheckCall(['git', 'clean', '-f'], cwd=chrome_dir)
-        stonesthrow.CheckCall(['git', 'rebase-update', '--no-fetch', '--keep-going'], cwd=chrome_dir)
+        stonesthrow.CheckCall(
+            ['git', 'rebase-update', '--no-fetch', '--keep-going'],
+            cwd=chrome_dir)
+
+    @CommandNeedsSource
+    def Sync_Command(self, options):
+        """Run 'gclient sync'"""
+
+        stonesthrow.CheckCall(['gclient', 'sync'], cwd=options.source_path)
 
 
 def ConfigureFlags(config):
@@ -244,7 +255,8 @@ def NeedsSource(options):
 def _GetCommandDescriptor(command_name, command):
     doc = command.__doc__.splitlines()
     description = doc[0]
-    depends_on_source = hasattr(command, 'needs_source') and command.needs_source
+    depends_on_source = hasattr(command,
+                                'needs_source') and command.needs_source
 
     usage = '\n'.join(doc[2:])
 

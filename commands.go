@@ -203,8 +203,8 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.OnGitRepositoryInfo(repo_info)
 		}},
 
-	{"run", "builder",
-		`run a command in the build directory.`, `Usage: run [-deps=Dependencies] command options ...
+	{"shell", "builder",
+		`run a command in the build directory.`, `Usage: run command options ...
 
 The shell command specified by [command] and [options] will be executed in the output directory corresponding to the target platform. The following symbols will be expanded if found:
 
@@ -215,22 +215,9 @@ The shell command specified by [command] and [options] will be executed in the o
 The tokens are expanded in the option value for '-dir' in addition to the command specification. Shell globs will not be expanded on the remote side.
 
 E.g.:
-    run -deps=a,b,c {src}/foo/bar {out}/a
+    run {src}/foo/bar {out}/a
 
-... builds the targets |a|, |b|, and |c|, and then executes foo/bar relative to the source directory. The only argument to bar is the absolute path to |a| which is assumed to be in the output directory.
-
-If the executable to be invoked is in the output directory, then by default the builder assumes that the executable should be rebuilt before execution.
-E.g.:
-    run ./foo
-    
-... builds and runs |foo|.
-
-To suppress this behavior, specify -autodeps=false.
-E.g.:
-    run -autodeps=false ./foo
-
-... runs |foo| without attempting to build it.
-
+... executes foo/bar relative to the source directory. The only argument to bar is the absolute path to |a| which is assumed to be in the output directory.
 `, func(f *flag.FlagSet) {
 			f.StringVar(&Flag_TargetPath, "dir", "{out}", "directory under which the command should be executed.")
 		},
@@ -483,7 +470,7 @@ func RegisterRemoteCommands(ctx context.Context, conn *ClientConnection, command
 				builder_client := NewBuildHostClient(rpc_connection)
 				repo_state, err := GetRepositoryState(
 					ctx, conn.ClientConfig.Repository, conn.Executor,
-					depends_on_source)
+					depends_on_source && conn.IsRemote())
 				if err != nil {
 					return err
 				}
