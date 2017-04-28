@@ -19,6 +19,7 @@ type HostConfig struct {
 	Alias           []string                          `json:"alias,omitempty"`
 	Repositories    map[string]*RepositoryConfig      `json:"repositories,omitempty"`
 	GomaPath        string                            `json:"goma_path,omitempty"`
+	GoPath          string                            `json:"go_path,omitempty"`
 	StonesthrowPath string                            `json:"stonesthrow,omitempty"`
 	MaxBuildJobs    int                               `json:"max_build_jobs,omitempty"`
 	Remotes         map[string]*RemoteTransportConfig `json:"remotes,omitempty"`
