@@ -204,7 +204,7 @@ class Commands:
         stonesthrow.CheckCall(
             ['git', 'checkout', 'origin/master'], cwd=chrome_dir)
         stonesthrow.CheckCall(
-            ['git', 'checkout', 'origin', 'master'], cwd=chrome_dir)
+            ['git', 'pull', 'origin', 'master'], cwd=chrome_dir)
 
         stonesthrow.CheckCall(['gclient', 'sync'], cwd=chrome_dir)
 
