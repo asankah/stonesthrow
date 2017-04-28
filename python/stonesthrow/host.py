@@ -17,7 +17,8 @@ def ConfigureCommonArgs(parser):
     
     parser.add_argument('--module', type=str, action='store', metavar='MODULE_NAME', help='module name to load.')
     parser.add_argument('--sys_path', type=str, action='append', metavar='PATH', help='path to append to sys.path. Can be specified more than once.')
-    parser.add_argument('--verify_source_needed', action='store_true', help='don\'t run the command. just determine if running the command requires synchronizing source state')
+    parser.add_argument('--verify-source-needed', action='store_true', help='don\'t run the command. just determine if running the command requires synchronizing source state')
+    parser.add_argument('--list-commands', action='store_true', help='list commands and exist')
     parser.add_argument('args', metavar='ARGS', nargs=argparse.REMAINDER)
 
 def LoadModule(options):
@@ -38,7 +39,6 @@ def ParseConfig(options):
         return json.load(options.config_file, encoding='utf-8')
     return json.loads(options.config, encoding='utf-8')
 
-
 def Main(args):
     parser = argparse.ArgumentParser(description='Python script host for Stonesthrow', add_help=False)
     ConfigureCommonArgs(parser)
@@ -49,6 +49,10 @@ def Main(args):
 
     module = LoadModule(host_options)
     config = ParseConfig(host_options)
+
+    if host_options.list_commands:
+        sys.stdout.write(json.dumps({"command": module.ListCommands(host_options)}))
+        return
 
     child_parser = module.ConfigureFlags(host_options)
     child_options = child_parser.parse_args(host_options.args, namespace=Options())

@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 )
 
 type FileExtractor struct {
@@ -152,13 +151,8 @@ func (h CommandHandler) Execute(ctx context.Context, f *flag.FlagSet, args ...in
 	}
 
 	conn := args[0].(*ClientConnection)
-	err := conn.InitFromFlags(ctx, f)
-	if err != nil {
-		fmt.Printf(err.Error())
-		return subcommands.ExitUsageError
-	}
 
-	err = h.handler(ctx, conn, f)
+	err := h.handler(ctx, conn, f)
 	if IsInvalidArgumentError(err) {
 		return subcommands.ExitUsageError
 	}
@@ -181,7 +175,6 @@ var (
 	Flag_Recursive             bool
 	Flag_Source                bool
 	Flag_TargetPath            string
-	Flag_TargetList            string
 	Flag_AutomaticDependencies bool
 )
 
@@ -210,29 +203,6 @@ var DefaultHandlers = []CommandHandler{
 			return conn.Sink.OnGitRepositoryInfo(repo_info)
 		}},
 
-	{"build", "builder",
-		`build specified targets.`, "", nil,
-		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			rpc_connection, err := conn.GetConnection(ctx)
-			if err != nil {
-				return err
-			}
-			builder_client := NewPlatformBuildHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, conn.IsRemote())
-			if err != nil {
-				return err
-			}
-			build_options := BuildOptions{
-				Platform:        conn.ServerConfig.Platform.Name,
-				Targets:         f.Args(),
-				RepositoryState: repo_state}
-			build_client, err := builder_client.Build(ctx, &build_options)
-			if err != nil {
-				return err
-			}
-			return conn.Sink.Drain(build_client)
-		}},
-
 	{"run", "builder",
 		`run a command in the build directory.`, `Usage: run [-deps=Dependencies] command options ...
 
@@ -240,101 +210,52 @@ The shell command specified by [command] and [options] will be executed in the o
 
     {src} : Expands to the full path to the source directory for the repository.
     {out} : Expands to the full path to the output directory for the platform.
+    {st}  : Expands to the full path to the host's StonesThrow installation.
 
-    The tokens are expanded in the option value for '-dir' in addition to the command specification. Shell globs will not be expanded on the remote side.
+The tokens are expanded in the option value for '-dir' in addition to the command specification. Shell globs will not be expanded on the remote side.
 
-    E.g.:
-          run -deps=a,b,c {src}/foo/bar {out}/a
+E.g.:
+    run -deps=a,b,c {src}/foo/bar {out}/a
 
-    ... builds the targets |a|, |b|, and |c|, and then executes foo/bar relative to the source directory. The only argument to bar is the absolute path to |a| which is assumed to be in the output directory.
+... builds the targets |a|, |b|, and |c|, and then executes foo/bar relative to the source directory. The only argument to bar is the absolute path to |a| which is assumed to be in the output directory.
 
-    If the executable to be invoked is in the output directory, then by default the builder assumes that the executable should be rebuilt before execution.
-    E.g.:
-          run ./foo
+If the executable to be invoked is in the output directory, then by default the builder assumes that the executable should be rebuilt before execution.
+E.g.:
+    run ./foo
     
-    ... builds and runs |foo|.
+... builds and runs |foo|.
 
-    To suppress this behavior, specify -autodeps=false.
-    E.g.:
-          run -autodeps=false ./foo
+To suppress this behavior, specify -autodeps=false.
+E.g.:
+    run -autodeps=false ./foo
 
-    ... runs |foo| without attempting to build it.
+... runs |foo| without attempting to build it.
+
 `, func(f *flag.FlagSet) {
-			f.StringVar(&Flag_TargetList, "deps", "", "comma separated list of dependencies that should be built before running command")
 			f.StringVar(&Flag_TargetPath, "dir", "{out}", "directory under which the command should be executed.")
-			f.BoolVar(&Flag_AutomaticDependencies, "autodeps", true, "determine dependencies automatically")
 		},
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			rpc_connection, err := conn.GetConnection(ctx)
 			if err != nil {
 				return err
 			}
-			builder_client := NewPlatformBuildHostClient(rpc_connection)
-			var targets []string
-			if Flag_TargetList != "" {
-				targets = strings.Split(Flag_TargetList, ",")
-			}
-			needs_repo_state := (len(targets) > 0 || Flag_AutomaticDependencies)
+			builder_client := NewBuildHostClient(rpc_connection)
 			repo_state, err := GetRepositoryState(
-				ctx, conn.ClientConfig.Repository, conn.Executor, conn.IsRemote() && needs_repo_state)
+				ctx, conn.ClientConfig.Repository, conn.Executor, false)
 			if err != nil {
 				return err
 			}
 			run_options := RunOptions{
 				Platform:        conn.ServerConfig.Platform.Name,
 				RepositoryState: repo_state,
-				Dependencies:    &TargetList{Target: targets},
 				Command: &ShellCommand{
 					Directory: Flag_TargetPath,
-					Command:   f.Args()},
-				AutomaticDependencies: Flag_AutomaticDependencies}
-			event_stream, err := builder_client.Run(ctx, &run_options)
+					Command:   f.Args()}}
+			event_stream, err := builder_client.RunShellCommand(ctx, &run_options)
 			if err != nil {
 				return err
 			}
 			return conn.Sink.Drain(event_stream)
-		}},
-
-	{"clobber", "builder",
-		`removes files from source or build directory.`, `Usage: clobber [-out|-src] [-force]
-
-`,
-		func(f *flag.FlagSet) {
-			f.BoolVar(&Flag_Out, "out", false, "clean the output directory.")
-			f.BoolVar(&Flag_Source, "src", false, "clean the source directory.")
-			f.BoolVar(&Flag_Force, "force", false,
-				"actually do the cleaning. Without this flag, the command merely lists which files would be affected.")
-		},
-		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			rpc_connection, err := conn.GetConnection(ctx)
-			if err != nil {
-				return err
-			}
-			builder_client := NewPlatformBuildHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
-			if err != nil {
-				return err
-			}
-			clobber_options := ClobberOptions{
-				Platform:        conn.ServerConfig.Platform.Name,
-				RepositoryState: repo_state,
-				Target:          ClobberOptions_SOURCE,
-				Force:           false}
-
-			if Flag_Out {
-				clobber_options.Target = ClobberOptions_OUTPUT
-			}
-
-			if Flag_Force {
-				clobber_options.Force = true
-			}
-
-			output_client, err := builder_client.Clobber(ctx, &clobber_options)
-			if err != nil {
-				return err
-			}
-
-			return conn.Sink.Drain(output_client)
 		}},
 
 	{"get", "builder",
@@ -368,7 +289,7 @@ The shell command specified by [command] and [options] will be executed in the o
 			}
 			options.Recurse = Flag_Recursive
 
-			builder_client := NewPlatformBuildHostClient(rpc_connection)
+			builder_client := NewBuildHostClient(rpc_connection)
 			stream, err := builder_client.FetchFile(ctx, &options)
 			if err != nil {
 				return err
@@ -400,27 +321,6 @@ The shell command specified by [command] and [options] will be executed in the o
 				return err
 			}
 			return conn.Sink.OnPong(ping_result)
-		}},
-
-	{"prepare", "builder",
-		`prepare build directory. Runs 'mb gen'.`, "", nil,
-		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			rpc_connection, err := conn.GetConnection(ctx)
-			if err != nil {
-				return err
-			}
-			build_host_client := NewPlatformBuildHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
-			if err != nil {
-				return err
-			}
-			event_stream, err := build_host_client.Prepare(ctx, &BuildOptions{
-				Platform:        conn.ServerConfig.Platform.Name,
-				RepositoryState: repo_state})
-			if err != nil {
-				return err
-			}
-			return conn.Sink.Drain(event_stream)
 		}},
 
 	{"pull", "repository management",
@@ -476,25 +376,6 @@ The shell command specified by [command] and [options] will be executed in the o
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"sync", "repository management",
-		`run 'gclient sync'.`, "", nil,
-		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			rpc_connection, err := conn.GetConnection(ctx)
-			if err != nil {
-				return err
-			}
-			repo_host_client := NewRepositoryHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
-			if err != nil {
-				return err
-			}
-			event_stream, err := repo_host_client.SyncLocal(ctx, repo_state)
-			if err != nil {
-				return err
-			}
-			return conn.Sink.Drain(event_stream)
-		}},
-
 	{"sync_workdir", "repository management",
 		`synchronize remote work directory with local.`, "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
@@ -508,25 +389,6 @@ The shell command specified by [command] and [options] will be executed in the o
 				return err
 			}
 			event_stream, err := repo_host_client.SyncRemote(ctx, repo_state)
-			if err != nil {
-				return err
-			}
-			return conn.Sink.Drain(event_stream)
-		}},
-
-	{"ru", "repository management",
-		`rebase-update.`, "", nil,
-		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
-			rpc_connection, err := conn.GetConnection(ctx)
-			if err != nil {
-				return err
-			}
-			repo_host_client := NewRepositoryHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
-			if err != nil {
-				return err
-			}
-			event_stream, err := repo_host_client.RebaseUpdate(ctx, repo_state)
 			if err != nil {
 				return err
 			}
@@ -571,23 +433,15 @@ The shell command specified by [command] and [options] will be executed in the o
 			return conn.Sink.Drain(event_stream)
 		}},
 
-	{"list", "builder",
+	{"list_targets", "builder",
 		"list available targets", "", nil,
 		func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
 			rpc_connection, err := conn.GetConnection(ctx)
 			if err != nil {
 				return err
 			}
-			builder_client := NewPlatformBuildHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
-			if err != nil {
-				return err
-			}
-			build_options := BuildOptions{
-				Platform:        conn.ServerConfig.Platform.Name,
-				Targets:         f.Args(),
-				RepositoryState: repo_state}
-			target_list, err := builder_client.ListTargets(ctx, &build_options)
+			builder_client := NewBuildHostClient(rpc_connection)
+			target_list, err := builder_client.ListTargets(ctx, &ListTargetsOptions{})
 			if err != nil {
 				return err
 			}
@@ -600,19 +454,95 @@ The shell command specified by [command] and [options] will be executed in the o
 			return RunPassthroughClient(conn.ClientConfig, conn.ServerConfig)
 		}}}
 
-func InvokeCommandline(ctx context.Context, sinkerator func(Config) OutputSink) error {
-	flagset := flag.NewFlagSet("", flag.ContinueOnError)
-	conn := &ClientConnection{Sinkerator: sinkerator}
-	conn.SetupTopLevelFlags(flagset)
+func RegisterRemoteCommands(ctx context.Context, conn *ClientConnection, commander *subcommands.Commander) error {
+	rpc_connection, err := conn.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
 
-	commander := subcommands.NewCommander(flagset, os.Args[0])
+	builder_client := NewBuildHostClient(rpc_connection)
+	command_list, err := builder_client.ListScriptCommands(ctx, &ListCommandsOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, command := range command_list.GetCommand() {
+		depends_on_source := command.GetDependsOnSource()
+		command_name := command.GetName()[0]
+		handler := CommandHandler{
+			command.GetName()[0],
+			"builder (script)",
+			command.GetDescription(),
+			command.GetUsage(),
+			nil,
+			func(ctx context.Context, conn *ClientConnection, f *flag.FlagSet) error {
+				rpc_connection, err := conn.GetConnection(ctx)
+				if err != nil {
+					return err
+				}
+				builder_client := NewBuildHostClient(rpc_connection)
+				repo_state, err := GetRepositoryState(
+					ctx, conn.ClientConfig.Repository, conn.Executor,
+					depends_on_source)
+				if err != nil {
+					return err
+				}
+
+				args := append([]string{command_name}, f.Args()...)
+				ro := RunOptions{
+					Platform:        conn.ServerConfig.PlatformName,
+					RepositoryState: repo_state,
+					Command: &ShellCommand{
+						Command:   args,
+						Directory: "{out}"}}
+
+				event_stream, err := builder_client.RunScriptCommand(ctx, &ro)
+				if err != nil {
+					return err
+				}
+
+				return conn.Sink.Drain(event_stream)
+			}}
+		commander.Register(handler, handler.group)
+	}
+	return nil
+}
+
+func InvokeCommandline(ctx context.Context, sinkerator func(Config) OutputSink) error {
+	toplevel_flags := flag.NewFlagSet("", flag.ContinueOnError)
+	conn := &ClientConnection{Sinkerator: sinkerator}
+	conn.SetupTopLevelFlags(toplevel_flags)
+
+	// We expect the initial Parse call to fail since it doesn't recognize
+	// the subcommands which haven't been added yet. The only thing we are
+	// interested in is if the user specified -h at the toplevel.
+	toplevel_flag_err := toplevel_flags.Parse(os.Args[1:])
+
+	err := conn.InitFromFlags(ctx, toplevel_flags)
+	if err != nil {
+		toplevel_flags.Usage()
+		return err
+	}
+
+	child_flags := flag.NewFlagSet("", flag.ContinueOnError)
+	commander := subcommands.NewCommander(child_flags, os.Args[0])
 	for _, handler := range DefaultHandlers {
 		commander.Register(handler, handler.group)
 	}
+	err = RegisterRemoteCommands(ctx, conn, commander)
+	if err != nil {
+		return err
+	}
+
 	commander.Register(commander.FlagsCommand(), "help and information")
 	commander.Register(commander.HelpCommand(), "help and information")
 
-	err := flagset.Parse(os.Args[1:])
+	if toplevel_flag_err == flag.ErrHelp {
+		commander.HelpCommand().Execute(ctx, toplevel_flags)
+		return nil
+	}
+
+	err = child_flags.Parse(toplevel_flags.Args())
 	if err != nil {
 		return NewInvalidArgumentError("invalid commandline arguments: %#v", os.Args)
 	}

@@ -19,7 +19,7 @@ func RunServer(Config Config) error {
 	service_host_server := ServiceHostServerImpl{Config: Config}
 	repository_host_server := RepositoryHostServerImpl{Config: Config, Repository: Config.Repository,
 		ProcessAdder: &service_host_server}
-	platform_build_server := PlatformBuildHostServerImpl{Config: Config, ProcessAdder: &service_host_server}
+	platform_build_server := BuildHostServerImpl{Config: Config, ProcessAdder: &service_host_server}
 
 	creds, err := getCredentialsForServer(Config)
 	if err != nil {
@@ -38,7 +38,7 @@ func RunServer(Config Config) error {
 	server := grpc.NewServer(grpc.Creds(creds))
 	RegisterServiceHostServer(server, &service_host_server)
 	RegisterRepositoryHostServer(server, &repository_host_server)
-	RegisterPlatformBuildHostServer(server, &platform_build_server)
+	RegisterBuildHostServer(server, &platform_build_server)
 	service_host_server.Server = server
 
 	return server.Serve(listener)

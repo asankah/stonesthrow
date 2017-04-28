@@ -162,14 +162,18 @@ message TargetList {
   repeated string target = 1;
 }
 
-service PlatformBuildHost {
-  rpc RunCommand(RunOptions) returns (stream JobEvent);
-  rpc ListCommands(ListCommandsOptions) returns (CommandList);
+service BuildHost {
+  rpc RunScriptCommand(RunOptions) returns (stream JobEvent);
+  rpc ListScriptCommands(ListCommandsOptions) returns (CommandList);
   rpc ListTargets(ListTargetsOptions) returns (TargetList);
+  rpc RunShellCommand(RunOptions) returns (stream JobEvent);
   rpc FetchFile(FetchFileOptions) returns (stream JobEvent);
 }
 
 service RepositoryHost {
+  rpc RunScriptCommand(RunOptions) returns (stream JobEvent);
+  rpc ListScriptCommands(ListCommandsOptions) returns (CommandList);
+  rpc RunShellCommand(RunOptions) returns (stream JobEvent);
   rpc GetBranchConfig(BranchConfigOptions) returns (GitRepositoryInfo);
   rpc SetBranchConfig(GitRepositoryInfo) returns (stream JobEvent);
   rpc PullFromUpstream(BranchList) returns (stream JobEvent);

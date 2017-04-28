@@ -56,7 +56,7 @@ func (s ScriptRunner) NeedsSource(ctx context.Context, args ...string) (bool, er
 		Result bool `json:"result"`
 	}
 
-	output, err := s.ExecuteNoStream(ctx, append(args, "--verify_source_needed")...)
+	output, err := s.ExecuteNoStream(ctx, append([]string{"--verify-source-needed"}, args...)...)
 	if err != nil {
 		return false, err
 	}
@@ -67,6 +67,21 @@ func (s ScriptRunner) NeedsSource(ctx context.Context, args ...string) (bool, er
 		return false, err
 	}
 	return bool_container.Result, nil
+}
+
+func (s ScriptRunner) ListCommands(ctx context.Context) (*CommandList, error) {
+	output, err := s.ExecuteNoStream(ctx, "--list-commands")
+	if err != nil {
+		return nil, err
+	}
+
+	var command_list CommandList
+	err = json.Unmarshal([]byte(output), &command_list)
+	if err != nil {
+		return nil, err
+	}
+
+	return &command_list, nil
 }
 
 func (s ScriptRunner) ExecutePassthrough(ctx context.Context, args ...string) error {

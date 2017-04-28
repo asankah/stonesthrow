@@ -12,10 +12,27 @@ type RepositoryHostServerImpl struct {
 	Config       Config
 	Repository   *RepositoryConfig
 	ProcessAdder ProcessAdder
+	Script       Script
+}
+
+func (r *RepositoryHostServerImpl) GetExecutor(s JobEventSender) Executor {
+	return NewJobEventExecutor(r.Repository.Host.Name, r.Repository.SourcePath, r.ProcessAdder, s)
+}
+
+func (r *RepositoryHostServerImpl) GetRepositoryHostServer() RepositoryHostServer {
+	return r
+}
+
+func (r *RepositoryHostServerImpl) GetScriptHostRunner() ScriptHostRunner {
+	return ScriptHostRunner{Host: r}
+}
+
+func (r *RepositoryHostServerImpl) GetConfig() *Config {
+	return &r.Config
 }
 
 func (r *RepositoryHostServerImpl) GetGitCommandsForJobEventSender(s JobEventSender) (Executor, RepositoryCommands) {
-	executor := NewJobEventExecutor(r.Repository.Host.Name, r.Repository.SourcePath, r.ProcessAdder, s)
+	executor := r.GetExecutor(s)
 	commands := RepositoryCommands{Repository: r.Repository, Executor: executor}
 	return executor, commands
 }
@@ -336,58 +353,24 @@ func (r *RepositoryHostServerImpl) PrepareForReceive(rs *RepositoryState, s Repo
 	return commands.GitCheckoutRevision(s.Context(), "origin/master")
 }
 
-func (r *RepositoryHostServerImpl) RebaseUpdate(rs *RepositoryState, s RepositoryHost_RebaseUpdateServer) error {
-	_, commands := r.GetGitCommandsForJobEventSender(s)
-
-	status, err := commands.GitStatus(s.Context())
-	if err != nil {
-		return err
-	}
-	if status.HasUnmerged {
-		return NewUnmergedChangesExistError("can't rebase-update with dirty tree")
-	}
-	// Store the known revisions in gitconfig before starting a rebase operation.
-
-	previousHead, _ := commands.GitCurrentBranch(s.Context())
-
-	err = commands.ExecuteInWorkDirPassthrough(r.Repository.RelativePath("clank"), s.Context(), "git", "checkout", "origin/master")
-	if err != nil {
-		return err
-	}
-
-	err = commands.ExecuteInWorkDirPassthrough(r.Repository.RelativePath("clank"), s.Context(), "git", "pull", "origin", "master")
-	if err != nil {
-		return err
-	}
-
-	err = commands.ExecuteInWorkDirPassthrough(r.Repository.SourcePath, s.Context(), "git", "checkout", "origin/master")
-	if err != nil {
-		return err
-	}
-
-	err = commands.ExecuteInWorkDirPassthrough(r.Repository.SourcePath, s.Context(), "git", "pull", "origin", "master")
-	if err != nil {
-		return err
-	}
-
-	err = r.SyncLocal(rs, s)
-	if err != nil {
-		return err
-	}
-
-	err = commands.ExecutePassthrough(s.Context(), "git", "clean", "-f")
-	err = commands.ExecutePassthrough(s.Context(), "git", "rebase-update", "--no-fetch", "--keep-going")
-	if previousHead != "" {
-		commands.ExecutePassthrough(s.Context(), "git", "checkout", previousHead)
-	} else {
-		commands.ExecutePassthrough(s.Context(), "git", "checkout", "origin/master")
-	}
-
-	return err
-}
-
 func (r *RepositoryHostServerImpl) FetchFile(fo *FetchFileOptions, s RepositoryHost_FetchFileServer) error {
 	return SendFiles(s.Context(), r.Repository.SourcePath, fo, s)
+}
+
+func (r *RepositoryHostServerImpl) RunScriptCommand(ro *RunOptions, s RepositoryHost_RunScriptCommandServer) error {
+	return r.GetScriptHostRunner().RunScriptCommand(ro, r.GetExecutor(s), s)
+}
+
+func (r *RepositoryHostServerImpl) ListScriptCommands(ctx context.Context, _ *ListCommandsOptions) (*CommandList, error) {
+	return r.GetScriptHostRunner().ListScriptCommands(ctx, r.GetExecutor(nil))
+}
+
+func (r *RepositoryHostServerImpl) RunShellCommand(ro *RunOptions, s RepositoryHost_RunShellCommandServer) error {
+	e := r.GetExecutor(s)
+	return e.ExecuteInWorkDirPassthrough(
+		r.GetScriptHostRunner().ExpandTokens(ro.GetCommand().GetDirectory()),
+		s.Context(),
+		r.GetScriptHostRunner().ExpandTokensInArray(ro.GetCommand().GetCommand())...)
 }
 
 func GetRepositoryState(ctx context.Context, r *RepositoryConfig, e Executor, push_builder_head bool) (*RepositoryState, error) {
