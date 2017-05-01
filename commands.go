@@ -441,6 +441,19 @@ E.g.:
 			return RunPassthroughClient(conn.ClientConfig, conn.ServerConfig)
 		}}}
 
+func IsInvokingBuiltinCommand(flagset *flag.FlagSet) bool {
+	if flagset.NArg() == 0 {
+		return false
+	}
+	command := flagset.Arg(0)
+	for _, handler := range DefaultHandlers {
+		if handler.name == command {
+			return true
+		}
+	}
+	return false
+}
+
 func RegisterRemoteCommands(ctx context.Context, conn *ClientConnection, commander *subcommands.Commander) error {
 	rpc_connection, err := conn.GetConnection(ctx)
 	if err != nil {
@@ -516,9 +529,12 @@ func InvokeCommandline(ctx context.Context, sinkerator func(Config) OutputSink) 
 	for _, handler := range DefaultHandlers {
 		commander.Register(handler, handler.group)
 	}
-	err = RegisterRemoteCommands(ctx, conn, commander)
-	if err != nil {
-		return err
+
+	if !IsInvokingBuiltinCommand(toplevel_flags) {
+		err = RegisterRemoteCommands(ctx, conn, commander)
+		if err != nil {
+			return err
+		}
 	}
 
 	commander.Register(commander.FlagsCommand(), "help and information")
