@@ -326,17 +326,14 @@ func (r *RepositoryHostServerImpl) SyncRemote(rs *RepositoryState, s RepositoryH
 	_, commands := r.GetGitCommandsForJobEventSender(s)
 
 	old_deps_hash, _ := commands.GitHashObject(s.Context(), r.Repository.RelativePath("DEPS"))
-	_, err := commands.GitTreeForRevision(s.Context(), rs.GetRevision())
-	if err != nil {
-		err = commands.GitFetchBuilderHead(s.Context())
-	}
-	if err != nil {
-		return err
-	}
-	err = commands.GitCheckoutRevision(s.Context(), rs.GetRevision())
+
+	// GitCheckoutRevision automatically fetches the BUILDER_HEAD revision
+	// if it can't resolve rs.GetRevision().
+	err := commands.GitCheckoutRevision(s.Context(), rs.GetRevision())
 	if err != nil {
 		return err
 	}
+
 	new_deps_hash, _ := commands.GitHashObject(s.Context(), r.Repository.RelativePath("DEPS"))
 	if old_deps_hash != new_deps_hash {
 		s.Send(&JobEvent{LogEvent: &LogEvent{
