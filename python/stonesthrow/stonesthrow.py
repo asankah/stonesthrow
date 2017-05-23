@@ -15,16 +15,20 @@ class Options(object):
 # These are the methods that each module should implement:
 #
 # def ConfigureFlags(config):
-#     return argparse.ArgumentParser()
-# 
-# def GetDependentBuildTargets(options, config):
-#     return []
-# 
-# def Run(options, config):
+#     return argparse.ArgumentParser() defining all the supported subcommands
+#     for the module.
+#
+# def ListCommands(options):
+#     Lists supported commands.
+#
+# def NeedsSource(options):
+#     Returns True iff the command selected in 'options' requires up-to-date
+#     sources.
+#
+# def Run(options):
 #     raise RuntimeError('Not implemented')
-# 
 
-def WriteControlData(data):
+def _WriteControlData(data):
     sys.stdout.write("\n")
     sys.stdout.write(data)
     sys.stdout.write("\n")
@@ -32,23 +36,23 @@ def WriteControlData(data):
 
 def NotifyStartProcess(args, directory):
     o = {"begin_command_event": { "command": {"command": args, "directory": directory }}}
-    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
+    _WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
 
 def NotifyEndProcess(return_code=0):
     o = {"end_command_event": { "return_code": return_code }}
-    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
+    _WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
 
 def Debug(message):
     o = { "log_event": { "msg": message , "severity": 2}}
-    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
+    _WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
 
 def Info(message):
     o = { "log_event": { "msg": message , "severity": 1}}
-    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
+    _WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
 
 def Error(message):
     o = { "log_event": { "msg": message , "severity": 0}}
-    WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
+    _WriteControlData("@@@J:{json}@@@".format(json=json.dumps(o)))
 
 def CheckCall(*args, **kwargs):
     return_code = 0

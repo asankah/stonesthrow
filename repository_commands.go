@@ -253,6 +253,9 @@ func (r RepositoryCommands) GitCheckoutRevision(ctx context.Context, targetRevis
 		return nil
 	}
 
+	// If we failed to look up the revision, then try fetching BUILDER_HEAD
+	// from upstream. If everything is working correctly, upstream's
+	// BUILDER_HEAD should include the target revision.
 	if err != nil {
 		err = r.GitFetchBuilderHead(ctx)
 	}
@@ -261,12 +264,7 @@ func (r RepositoryCommands) GitCheckoutRevision(ctx context.Context, targetRevis
 		return err
 	}
 
-	err = r.ExecutePassthrough(ctx, "git", "checkout", "--force", "--quiet", "--no-progress", targetRevision)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return r.ExecutePassthrough(ctx, "git", "checkout", "--force", "--quiet", "--no-progress", targetRevision)
 }
 
 type GitStatusResult struct {

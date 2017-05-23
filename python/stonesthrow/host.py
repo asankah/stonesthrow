@@ -12,8 +12,8 @@ from stonesthrow import Options
 def ConfigureCommonArgs(parser):
     # Add common flags.
     m = parser.add_mutually_exclusive_group()
-    m.add_argument('--config', type=str, action='store', metavar='CONFIG', help='Configuration. should be specified as a JSON string.')
-    m.add_argument('--config_file', nargs='?', type=argparse.FileType('r'), metavar='CONFIG_FILE', help='configuration file should contain valid JSON.')
+    m.add_argument('--config', type=str, action='store', metavar='CONFIG', help='configuration in the form of a JSON string.')
+    m.add_argument('--config_file', nargs='?', type=argparse.FileType('r'), metavar='CONFIG_FILE', help='configuration in the form of a JSON file.')
     
     parser.add_argument('--module', type=str, action='store', metavar='MODULE_NAME', help='module name to load.')
     parser.add_argument('--sys_path', type=str, action='append', metavar='PATH', help='path to append to sys.path. Can be specified more than once.')

@@ -13,7 +13,7 @@ def Argument(*args, **kwargs):
   
   Usage:
     @Argument('--hello', '-H', help='Hello world!')
-    def foo():
+    def foo_Command():
       pass
 
   ... will annotate `foo` with an argument that's equivalent to what's produced
@@ -30,6 +30,18 @@ def Argument(*args, **kwargs):
 
 
 def CommandNeedsSource(func):
+    """Decorator @CommandNeedsSource annotates a command handler indicating
+    that the command requires an up-to-date source checkout. This means that
+    the builder host will check out the revision matching the request and
+    perform a `gclient sync` if necessary along with preparing the build
+    directory.
+
+    Usage:
+      @CommandNeedsSource
+      def foo_Command():
+        pass
+        
+    """
     vars(func)['needs_source'] = True
     return func
 
@@ -62,27 +74,27 @@ def EnsureGoma(options):
     if platform.system() == 'Windows':
         attempted_to_start_goma = False
         for x in range(5):
-            goma_command = os.path.join(options.goma_path, 'goma_ctl.bat')
+            goma_ctl = os.path.join(options.goma_path, 'goma_ctl.bat')
             if IsGomaRunning(options,
-                             ['cmd.exe', '/c', goma_command, 'status']):
+                             ['cmd.exe', '/c', goma_ctl, 'status']):
                 return True
 
             if not attempted_to_start_goma:
                 attempted_to_start_goma = True
-                command = ['cmd.exe', '/c', goma_command, 'ensure_start']
+                command = ['cmd.exe', '/c', goma_ctl, 'ensure_start']
                 # Don't wait for completion.
                 subprocess.Popen(command, shell=True)
 
-                time.sleep(1)
+            time.sleep(1)
         stonesthrow.Error('timed out while attempting to start Goma')
         return False
 
     # On Posix
-    goma_script = os.path.join(options.goma_path, 'goma_ctl.py')
-    if IsGomaRunning(options, ['python', goma_script, 'status']):
+    goma_ctl = os.path.join(options.goma_path, 'goma_ctl.py')
+    if IsGomaRunning(options, ['python', goma_ctl, 'status']):
         return True
 
-    stonesthrow.CheckCall(['python', goma_script, 'ensure_start'])
+    stonesthrow.CheckCall(['python', goma_ctl, 'ensure_start'])
     return True
 
 
@@ -105,6 +117,17 @@ def _BuildTargetFromCommand(options, command):
 
 
 class Commands:
+    """Defines the commands that will be invoked for a Chromium repository.
+
+    Any method that ends with the suffix '_Command' defines a new subcommand.
+    Arguments and source requirements for the subcommand are specified via the
+    @Argument and @CommandNeedsSource decorators.
+
+    A method defining a subcommand receives a single argument, which is the
+    result of calling argparse.ArgumentParser.parse_args() containing the
+    parsed arguments.
+    """
+
     def Prepare_Command(self, options):
         """prepare build directory."""
 
@@ -233,7 +256,7 @@ def ConfigureFlags(config):
 
         value = getattr(c, name)
 
-        command = name[:-len('_command')].lower()
+        command = name[:-len('_Command')].lower()
         doc = value.__doc__
         subparser = subparsers.add_parser(command, help=value.__doc__)
         subparser.set_defaults(method=value)
