@@ -19,6 +19,7 @@ def ConfigureCommonArgs(parser):
     parser.add_argument('--sys_path', type=str, action='append', metavar='PATH', help='path to append to sys.path. Can be specified more than once.')
     parser.add_argument('--verify-source-needed', action='store_true', help='don\'t run the command. just determine if running the command requires synchronizing source state')
     parser.add_argument('--list-commands', action='store_true', help='list commands and exist')
+    parser.add_argument('--event', type=str, action='store', metavar='EVENT_NAME', help='event notification.')
     parser.add_argument('args', metavar='ARGS', nargs=argparse.REMAINDER)
 
 def LoadModule(options):
@@ -52,6 +53,10 @@ def Main(args):
 
     if host_options.list_commands:
         sys.stdout.write(json.dumps({"command": module.ListCommands(host_options)}))
+        return
+
+    if host_options.event:
+        module.NotifyEvent(host_options)
         return
 
     child_parser = module.ConfigureFlags(host_options)

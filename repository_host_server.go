@@ -9,38 +9,50 @@ import (
 )
 
 type RepositoryHostServerImpl struct {
-	Config       Config
-	Repository   *RepositoryConfig
+	Host         *HostConfig
 	ProcessAdder ProcessAdder
-	Script       Script
 }
 
-func (r *RepositoryHostServerImpl) GetExecutor(s JobEventSender) Executor {
-	return NewJobEventExecutor(r.Repository.Host.Name, r.Repository.SourcePath, r.ProcessAdder, s)
+type RepositoryGetter interface {
+	GetRepository() string
+}
+
+func (r *RepositoryHostServerImpl) GetRepository(rg RepositoryGetter) (*RepositoryConfig, error) {
+	repo_name := rg.GetRepository()
+	repo, ok := r.Host.Repositories[repo_name]
+	if !ok {
+		return nil, NewInvalidRepositoryError("%s not found", repo_name)
+	}
+	return repo, nil
+}
+
+func (r *RepositoryHostServerImpl) GetExecutor(s JobEventSender, repo *RepositoryConfig) Executor {
+	return NewJobEventExecutor(repo.Host.Name, repo.SourcePath, r.ProcessAdder, s)
 }
 
 func (r *RepositoryHostServerImpl) GetRepositoryHostServer() RepositoryHostServer {
 	return r
 }
 
-func (r *RepositoryHostServerImpl) GetScriptHostRunner() ScriptHostRunner {
-	return ScriptHostRunner{Host: r}
+func (r *RepositoryHostServerImpl) GetScriptHostRunner(repo *RepositoryConfig) ScriptHostRunner {
+	var config Config
+	config.SelectServerConfig(r.Host.HostsConfig.ConfigurationFile, "*", repo.Name)
+	return ScriptHostRunner{Config: config}
 }
 
-func (r *RepositoryHostServerImpl) GetConfig() *Config {
-	return &r.Config
-}
-
-func (r *RepositoryHostServerImpl) GetGitCommandsForJobEventSender(s JobEventSender) (Executor, RepositoryCommands) {
-	executor := r.GetExecutor(s)
-	commands := RepositoryCommands{Repository: r.Repository, Executor: executor}
+func (r *RepositoryHostServerImpl) GetGitCommandsForJobEventSender(s JobEventSender, repo *RepositoryConfig) (Executor, RepositoryCommands) {
+	executor := r.GetExecutor(s, repo)
+	commands := RepositoryCommands{Repository: repo, Executor: executor}
 	return executor, commands
 }
 
-func (r *RepositoryHostServerImpl) GetRepositoryHostPeer(ctx context.Context) (RepositoryHostClient, error) {
+func (r *RepositoryHostServerImpl) GetRepositoryUpstreamPeer(ctx context.Context, repo *RepositoryConfig) (RepositoryHostClient, error) {
 	var remote_config Config
-	remote_config.SelectPeerConfig(r.Config.ConfigurationFile, r.Repository.GitConfig.RemoteHost.Name, r.Repository.Name)
-	rpc_connection, err := ConnectTo(ctx, r.Config, remote_config)
+	remote_config.SelectPeerConfig(r.Host.HostsConfig.ConfigurationFile, repo.GitConfig.RemoteHost.Name, repo.Name)
+
+	var local_config Config
+	local_config.SelectLocalClientConfig(r.Host.HostsConfig.ConfigurationFile, remote_config.PlatformName, repo.Name)
+	rpc_connection, err := ConnectTo(ctx, local_config, remote_config)
 	if err != nil {
 		return nil, err
 	}
@@ -66,8 +78,12 @@ func SelectMatchingBranchConfigs(branches []string, branch_configs []*GitReposit
 }
 
 func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, co *BranchConfigOptions) (*GitRepositoryInfo, error) {
-	properties := r.Repository.GitConfig.SyncableProperties
-	_, commands := r.GetGitCommandsForJobEventSender(nil)
+	repo, err := r.GetRepository(co)
+	if err != nil {
+		return nil, err
+	}
+	properties := repo.GitConfig.SyncableProperties
+	_, commands := r.GetGitCommandsForJobEventSender(nil, repo)
 	propertySet := make(map[string]bool)
 	for _, property := range properties {
 		propertySet[property] = true
@@ -195,7 +211,11 @@ func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, co *Bran
 
 func (r *RepositoryHostServerImpl) SetBranchConfig(info *GitRepositoryInfo, s RepositoryHost_SetBranchConfigServer) error {
 
-	_, commands := r.GetGitCommandsForJobEventSender(s)
+	repo, err := r.GetRepository(info)
+	if err != nil {
+		return err
+	}
+	_, commands := r.GetGitCommandsForJobEventSender(s, repo)
 	for _, branch := range info.GetBranches() {
 		revision, err := commands.ExecuteNoStream(s.Context(), "git", "rev-parse", branch.GetName())
 		if err != nil {
@@ -220,7 +240,11 @@ func (r *RepositoryHostServerImpl) SetBranchConfig(info *GitRepositoryInfo, s Re
 }
 
 func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s RepositoryHost_PullFromUpstreamServer) error {
-	_, commands := r.GetGitCommandsForJobEventSender(s)
+	repo, err := r.GetRepository(list)
+	if err != nil {
+		return err
+	}
+	_, commands := r.GetGitCommandsForJobEventSender(s, repo)
 
 	if old_branch, err := commands.GitCurrentBranch(s.Context()); err == nil {
 		err = commands.GitCheckoutRevision(s.Context(), "origin/master")
@@ -229,11 +253,11 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 		}
 	}
 
-	if r.Repository.GitConfig.RemoteHost == nil {
+	if repo.GitConfig.RemoteHost == nil {
 		return nil
 	}
 
-	remote_repo_client, err := r.GetRepositoryHostPeer(s.Context())
+	remote_repo_client, err := r.GetRepositoryUpstreamPeer(s.Context())
 	if err != nil {
 		return err
 	}
@@ -261,7 +285,11 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 }
 
 func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s RepositoryHost_PushToUpstreamServer) error {
-	e, commands := r.GetGitCommandsForJobEventSender(s)
+	repo, err := r.GetRepository(list)
+	if err != nil {
+		return err
+	}
+	e, commands := r.GetGitCommandsForJobEventSender(s, repo)
 	branches := list.GetBranch()
 
 	if len(branches) == 0 {
@@ -276,12 +304,12 @@ func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s Repository
 		}
 	}
 
-	repo_state, err := GetRepositoryState(s.Context(), r.Repository, e, false)
+	repo_state, err := GetRepositoryState(s.Context(), repo, e, false)
 	if err != nil {
 		return err
 	}
 
-	remote_repo_client, err := r.GetRepositoryHostPeer(s.Context())
+	remote_repo_client, err := r.GetRepositoryUpstreamPeer(s.Context())
 	if err != nil {
 		return err
 	}
@@ -313,57 +341,71 @@ func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s Repository
 }
 
 func (r *RepositoryHostServerImpl) Status(rs *RepositoryState, s RepositoryHost_StatusServer) error {
-	_, commands := r.GetGitCommandsForJobEventSender(s)
+	repo, err := r.GetRepository(rs)
+	if err != nil {
+		return err
+	}
+	_, commands := r.GetGitCommandsForJobEventSender(s, repo)
 	return commands.ExecutePassthrough(s.Context(), "git", "status")
 }
 
-func (r *RepositoryHostServerImpl) SyncLocal(rs *RepositoryState, s RepositoryHost_SyncLocalServer) error {
-	_, commands := r.GetGitCommandsForJobEventSender(s)
-	return commands.ExecutePassthrough(s.Context(), "gclient", "sync")
-}
-
 func (r *RepositoryHostServerImpl) SyncRemote(rs *RepositoryState, s RepositoryHost_SyncRemoteServer) error {
-	_, commands := r.GetGitCommandsForJobEventSender(s)
-
-	old_deps_hash, _ := commands.GitHashObject(s.Context(), r.Repository.RelativePath("DEPS"))
+	repo, err := r.GetRepository(rs)
+	if err != nil {
+		return err
+	}
+	_, commands := r.GetGitCommandsForJobEventSender(s, repo)
 
 	// GitCheckoutRevision automatically fetches the BUILDER_HEAD revision
 	// if it can't resolve rs.GetRevision().
-	err := commands.GitCheckoutRevision(s.Context(), rs.GetRevision())
+	err = commands.GitCheckoutRevision(s.Context(), rs.GetRevision())
 	if err != nil {
 		return err
 	}
 
-	new_deps_hash, _ := commands.GitHashObject(s.Context(), r.Repository.RelativePath("DEPS"))
-	if old_deps_hash != new_deps_hash {
-		s.Send(&JobEvent{LogEvent: &LogEvent{
-			Host:     r.Repository.Host.Name,
-			Msg:      "DEPS changed. Running 'sync'",
-			Severity: LogEvent_INFO}})
-		return commands.ExecutePassthrough(s.Context(), "gclient", "sync")
-	}
-	return nil
+	return r.GetScriptHostRunner().OnRepositoryCheckout(s.Context(), r.GetExecutor(s, repo), s)
 }
 
 func (r *RepositoryHostServerImpl) PrepareForReceive(rs *RepositoryState, s RepositoryHost_PrepareForReceiveServer) error {
-	_, commands := r.GetGitCommandsForJobEventSender(s)
+	repo, err := r.GetRepository(rs)
+	if err != nil {
+		return err
+	}
+	_, commands := r.GetGitCommandsForJobEventSender(s, repo)
 	return commands.GitCheckoutRevision(s.Context(), "origin/master")
 }
 
 func (r *RepositoryHostServerImpl) FetchFile(fo *FetchFileOptions, s RepositoryHost_FetchFileServer) error {
-	return SendFiles(s.Context(), r.Repository.SourcePath, fo, s)
+	repo, err := r.GetRepository(rs)
+	if err != nil {
+		return err
+	}
+	return SendFiles(s.Context(), repo.SourcePath, fo, s)
 }
 
 func (r *RepositoryHostServerImpl) RunScriptCommand(ro *RunOptions, s RepositoryHost_RunScriptCommandServer) error {
-	return r.GetScriptHostRunner().RunScriptCommand(ro, r.GetExecutor(s), s)
+	repo, err := r.GetRepository(ro.GetRepositoryState())
+	if err != nil {
+		return err
+	}
+	return r.GetScriptHostRunner().RunScriptCommand(ro, r.GetExecutor(s, repo), s)
 }
 
-func (r *RepositoryHostServerImpl) ListScriptCommands(ctx context.Context, _ *ListCommandsOptions) (*CommandList, error) {
-	return r.GetScriptHostRunner().ListScriptCommands(ctx, r.GetExecutor(nil))
+func (r *RepositoryHostServerImpl) ListScriptCommands(ctx context.Context, l *ListCommandsOptions) (*CommandList, error) {
+	repo, err := r.GetRepository(l)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.GetScriptHostRunner().ListScriptCommands(ctx, r.GetExecutor(nil, repo))
 }
 
 func (r *RepositoryHostServerImpl) RunShellCommand(ro *RunOptions, s RepositoryHost_RunShellCommandServer) error {
-	e := r.GetExecutor(s)
+	repo, err := r.GetRepository(ro.GetRepositoryState())
+	if err != nil {
+		return err
+	}
+	e := r.GetExecutor(s, repo)
 	return e.ExecuteInWorkDirPassthrough(
 		r.GetScriptHostRunner().ExpandTokens(ro.GetCommand().GetDirectory()),
 		s.Context(),

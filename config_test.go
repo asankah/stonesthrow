@@ -15,7 +15,7 @@ func TestConfig_ReadFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = c.SelectLocalServerConfig(&cf, "linux", "")
+	err = c.SelectServerConfig(&cf, "linux", "chrome")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestConfig_ReadFrom(t *testing.T) {
 		t.Fatal("Platform")
 	}
 
-	err = c.SelectLocalServerConfig(&cf, "chromeos", "")
+	err = c.SelectServerConfig(&cf, "chromeos", "chrome")
 	if err == nil {
 		t.Fatal("Should've failed to load non-existent platform")
 	}

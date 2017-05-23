@@ -86,12 +86,12 @@ func (c *ClientConnection) InitFromFlags(ctx context.Context, f *flag.FlagSet) e
 		return err
 	}
 
-	err = server_config.SelectServerConfig(&config_file, c.platform, c.repository)
+	err = server_config.SelectConfig(&config_file, "", c.repository, c.platform)
 	if err != nil {
 		return err
 	}
 
-	err = client_config.SelectLocalClientConfig(&config_file, c.platform, c.repository)
+	err = client_config.SelectLocalClientConfig(&config_file, c.repository)
 	if err != nil {
 		return err
 	}
@@ -390,11 +390,7 @@ E.g.:
 				return err
 			}
 			service_host_client := NewServiceHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
-			if err != nil {
-				return err
-			}
-			event_stream, err := service_host_client.Shutdown(ctx, repo_state)
+			event_stream, err := service_host_client.Shutdown(ctx, &ShutdownOptions{})
 			if err != nil {
 				return err
 			}
@@ -409,11 +405,7 @@ E.g.:
 				return err
 			}
 			service_host_client := NewServiceHostClient(rpc_connection)
-			repo_state, err := GetRepositoryState(ctx, conn.ClientConfig.Repository, conn.Executor, false)
-			if err != nil {
-				return err
-			}
-			event_stream, err := service_host_client.SelfUpdate(ctx, repo_state)
+			event_stream, err := service_host_client.SelfUpdate(ctx, &SelfUpdateOptions{})
 			if err != nil {
 				return err
 			}
@@ -490,7 +482,7 @@ func RegisterRemoteCommands(ctx context.Context, conn *ClientConnection, command
 
 				args := append([]string{command_name}, f.Args()...)
 				ro := RunOptions{
-					Platform:        conn.ServerConfig.PlatformName,
+					Platform:        conn.ServerConfig.Platform.Name,
 					RepositoryState: repo_state,
 					Command: &ShellCommand{
 						Command:   args,

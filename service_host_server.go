@@ -24,29 +24,32 @@ func (h *ServiceHostServerImpl) Ping(ctx context.Context, po *PingOptions) (*Pin
 	return &PingResult{Pong: po.GetPing()}, nil
 }
 
-func (h *ServiceHostServerImpl) ListJobs(ctx context.Context, rs *RepositoryState) (*BuilderJobs, error) {
+func (h *ServiceHostServerImpl) ListJobs(ctx context.Context, l *ListJobsOptions) (*BuilderJobs, error) {
 	return nil, NewNothingToDoError("not implemented")
 }
 
-func (h *ServiceHostServerImpl) KillJobs(bj *BuilderJobs, s ServiceHost_KillJobsServer) error {
+func (h *ServiceHostServerImpl) KillJobs(bj *KillJobsOptions, s ServiceHost_KillJobsServer) error {
 	return NewNothingToDoError("not implemented")
 }
 
-func (h *ServiceHostServerImpl) Shutdown(rs *RepositoryState, s ServiceHost_ShutdownServer) error {
+func (h *ServiceHostServerImpl) Shutdown(o *ShutdownOptions, s ServiceHost_ShutdownServer) error {
 	go func() {
 		h.Server.GracefulStop()
 	}()
 	return nil
 }
 
-func (h *ServiceHostServerImpl) SelfUpdate(rs *RepositoryState, s ServiceHost_SelfUpdateServer) error {
+func (h *ServiceHostServerImpl) SelfUpdate(o *SelfUpdateOptions, s ServiceHost_SelfUpdateServer) error {
 	updater_command := []string{
-		"st_reload", "-pid", fmt.Sprintf("%d", os.Getpid()), "-package", "github.com/asankah/stonesthrow", "--",
+		"st_reload",
+		"-pid", fmt.Sprintf("%d", os.Getpid()),
+		"-package", "github.com/asankah/stonesthrow",
+		"--",
 		"st_host",
 		"-platform", h.Config.PlatformName,
 		"-repository", h.Config.RepositoryName,
 		"-config", h.Config.ConfigurationFile.FileName}
-	h.Shutdown(rs, s)
+	h.Shutdown(&ShutdownOptions{}, s)
 	cmd := exec.Command(updater_command[0], updater_command[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -74,12 +77,12 @@ func (h *ServiceHostServerImpl) AddProcess(command []string, process *os.Process
 }
 
 func (h *ServiceHostServerImpl) RemoveProcess(process *os.Process, state *os.ProcessState) {
-	bj, ok := h.ProcessMap[process.Pid]
+	p, ok := h.ProcessMap[process.Pid]
 	if !ok {
 		return
 	}
-	bj.State.Running = false
-	bj.State.EndTime = NewTimestampFromTime(time.Now())
-	bj.SystemTime = NewDurationFromDuration(state.SystemTime())
-	bj.UserTime = NewDurationFromDuration(state.UserTime())
+	p.State.Running = false
+	p.State.EndTime = NewTimestampFromTime(time.Now())
+	p.SystemTime = NewDurationFromDuration(state.SystemTime())
+	p.UserTime = NewDurationFromDuration(state.UserTime())
 }

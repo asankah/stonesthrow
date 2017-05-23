@@ -314,6 +314,8 @@ def ListCommands(options):
 
     return commands
 
+def NotifyEvent(options):
+    pass
 
 def Run(options):
     if not hasattr(options, 'method'):

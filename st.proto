@@ -24,10 +24,11 @@ message RunState {
 }
 
 message BuilderJob {
-  ShellCommand command = 1;
-  RunState state = 2;
-  google.protobuf.Duration system_time = 3;
-  google.protobuf.Duration user_time = 4;
+  int32 id = 1;
+  ShellCommand command = 2;
+  RunState state = 3;
+  google.protobuf.Duration system_time = 4;
+  google.protobuf.Duration user_time = 5;
 }
 
 message BuilderJobs {
@@ -49,8 +50,9 @@ message GitRepositoryInfo {
     string fetch_url = 3;
   }
 
-  repeated Branch branches = 1;
-  repeated Upstream upstreams = 2;
+  string repository = 1;
+  repeated Branch branches = 2;
+  repeated Upstream upstreams = 3;
 }
 
 message LogEvent {
@@ -111,7 +113,8 @@ message JobEvent {
 }
 
 message BranchList {
-  repeated string branch = 1;
+  string repository = 1;
+  repeated string branch = 2;
 }
 
 message RunOptions {
@@ -130,17 +133,22 @@ message PingResult {
 }
 
 message FetchFileOptions {
-  string relative_path = 1;
-  string filename_glob = 2;
-  bool recurse = 3;
+  string repository = 1;
+  string platform = 2;
+  string relative_path = 3;
+  string filename_glob = 4;
+  bool recurse = 5;
 }
 
 message BranchConfigOptions {
-  string branch_spec = 1;
-  bool include_git_config = 2;
+  string repository = 1;
+  string branch_spec = 2;
+  bool include_git_config = 3;
 }
 
 message ListCommandsOptions {
+  string repository = 1;
+  string platform = 2;
 }
 
 message Command {
@@ -156,10 +164,25 @@ message CommandList {
 }
 
 message ListTargetsOptions {
+  string repository = 1;
+  string platform = 2;
 }
 
 message TargetList {
   repeated string target = 1;
+}
+
+message ListJobsOptions {
+}
+
+message KillJobsOptions {
+  repeated int32 id = 1;
+}
+
+message ShutdownOptions {
+}
+
+message SelfUpdateOptions {
 }
 
 service BuildHost {
@@ -179,7 +202,6 @@ service RepositoryHost {
   rpc PullFromUpstream(BranchList) returns (stream JobEvent);
   rpc PushToUpstream(BranchList) returns (stream JobEvent);
   rpc Status(RepositoryState) returns (stream JobEvent);
-  rpc SyncLocal(RepositoryState) returns (stream JobEvent);
   rpc SyncRemote(RepositoryState) returns (stream JobEvent);
   rpc PrepareForReceive(RepositoryState) returns (stream JobEvent);
   rpc FetchFile(FetchFileOptions) returns (stream JobEvent);
@@ -187,8 +209,8 @@ service RepositoryHost {
 
 service ServiceHost {
   rpc Ping(PingOptions) returns (PingResult);
-  rpc ListJobs(RepositoryState) returns (BuilderJobs);
-  rpc KillJobs(BuilderJobs) returns (stream JobEvent);
-  rpc Shutdown(RepositoryState) returns (stream JobEvent);
-  rpc SelfUpdate(RepositoryState) returns (stream JobEvent) ;
+  rpc ListJobs(ListJobsOptions) returns (BuilderJobs);
+  rpc KillJobs(KillJobsOptions) returns (stream JobEvent);
+  rpc Shutdown(ShutdownOptions) returns (stream JobEvent);
+  rpc SelfUpdate(SelfUpdateOptions) returns (stream JobEvent) ;
 }

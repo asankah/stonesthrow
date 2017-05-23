@@ -3,7 +3,6 @@ package stonesthrow
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 )
 
 type Endpoint struct {
@@ -15,53 +14,19 @@ type Endpoint struct {
 }
 
 type PlatformConfig struct {
-	EndpointStrings   map[string]string `json:"endpoints"`
-	RelativeBuildPath string            `json:"out,omitempty"`
-	MbConfigName      string            `json:"mb_config,omitempty"`
+	RelativeBuildPath string `json:"out,omitempty"`
+	MbConfigName      string `json:"mb_config,omitempty"`
 
-	Name       string              `json:"-"`
-	BuildPath  string              `json:"-"`
-	Repository *RepositoryConfig   `json:"-"`
-	Endpoints  map[string]Endpoint `json:"-"`
+	Name       string            `json:"-"`
+	BuildPath  string            `json:"-"`
+	Repository *RepositoryConfig `json:"-"`
 }
 
 func (p *PlatformConfig) Normalize(name string, repo *RepositoryConfig) error {
-	hosts := repo.Host.HostsConfig
 	p.Name = name
 	p.Repository = repo
 	p.BuildPath = filepath.Join(repo.SourcePath, p.RelativeBuildPath)
-	p.Endpoints = make(map[string]Endpoint)
-	for host, ep_string := range p.EndpointStrings {
-		components := strings.Split(ep_string, ",")
-		if len(components) == 2 {
-			p.Endpoints[host] = Endpoint{
-				Network:  components[0],
-				Address:  components[1],
-				HostName: host,
-				Host:     hosts.HostByName(host)}
-			if p.Endpoints[host].Host == nil {
-				return fmt.Errorf("%s -> %s -> %s: Endpoint host %s can't be resolved",
-					repo.Host.Name, repo.Name, p.Name, host)
-			}
-		} else {
-			return fmt.Errorf("Address \"%s\" was invalid. Should be of the form <network>,<address>", ep_string)
-		}
-	}
 	return p.Validate()
-}
-
-func (p *PlatformConfig) EndpointFor(host *HostConfig) *Endpoint {
-	ep, ok := p.Endpoints[host.Name]
-	if ok && ep.Host == host {
-		return &ep
-	}
-
-	for _, ep = range p.Endpoints {
-		if ep.Host == host {
-			return &ep
-		}
-	}
-	return nil
 }
 
 func (p *PlatformConfig) Validate() error {

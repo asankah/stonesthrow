@@ -16,7 +16,7 @@ type CertificateConfig struct {
 }
 
 type HostConfig struct {
-	Alias           []string                          `json:"alias,omitempty"`
+	Nickname        []string                          `json:"nickname,omitempty"`
 	Repositories    map[string]*RepositoryConfig      `json:"repositories,omitempty"`
 	GomaPath        string                            `json:"goma_path,omitempty"`
 	GoPath          string                            `json:"go_path,omitempty"`
@@ -25,10 +25,12 @@ type HostConfig struct {
 	Remotes         map[string]*RemoteTransportConfig `json:"remotes,omitempty"`
 	Certificates    *CertificateConfig                `json:"certificates,omitempty"`
 	ScriptPath      string                            `json:"scripts"`
+	EndpointStrings map[string]string                 `json:"endpoints"`
 
-	Name              string            `json:"-"`
-	DefaultRepository *RepositoryConfig `json:"-"`
-	HostsConfig       *HostsConfig      `json:"-"`
+	Name              string              `json:"-"`
+	DefaultRepository *RepositoryConfig   `json:"-"`
+	HostsConfig       *HostsConfig        `json:"-"`
+	Endpoints         map[string]Endpoint `json:"-"`
 }
 
 func (h *HostConfig) IsWildcard() bool {
@@ -56,6 +58,24 @@ func (h *HostConfig) Normalize(hosts *HostsConfig) error {
 	}
 	if len(h.Repositories) != 1 {
 		h.DefaultRepository = nil
+	}
+
+	h.Endpoints = make(map[string]Endpoint)
+	for host, ep_string := range h.EndpointStrings {
+		components := strings.Split(ep_string, ",")
+		if len(components) == 2 {
+			h.Endpoints[host] = Endpoint{
+				Network:  components[0],
+				Address:  components[1],
+				HostName: host,
+				Host:     hosts.HostByName(host)}
+			if h.Endpoints[host].Host == nil {
+				return fmt.Errorf("%s: Endpoint host %s can't be resolved",
+					h.Name, host)
+			}
+		} else {
+			return fmt.Errorf("Address \"%s\" was invalid. Should be of the form <network>,<address>", ep_string)
+		}
 	}
 
 	return h.Validate()
@@ -98,11 +118,25 @@ func (h *HostConfig) IsSameHost(hostname string) bool {
 		return true
 	}
 
-	for _, alias := range h.Alias {
+	for _, alias := range h.Nickname {
 		if strings.EqualFold(hostname, alias) {
 			return true
 		}
 	}
 
 	return false
+}
+
+func (p *HostConfig) GetEndpointOnHost(host *HostConfig) *Endpoint {
+	ep, ok := p.Endpoints[host.Name]
+	if ok && ep.Host == host {
+		return &ep
+	}
+
+	for _, ep = range p.Endpoints {
+		if ep.Host == host {
+			return &ep
+		}
+	}
+	return nil
 }

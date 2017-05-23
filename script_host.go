@@ -6,13 +6,8 @@ import (
 	"strings"
 )
 
-type ScriptHost interface {
-	GetRepositoryHostServer() RepositoryHostServer
-	GetConfig() *Config
-}
-
 type ScriptHostRunner struct {
-	Host   ScriptHost
+	Config Config
 	Script Script
 }
 
@@ -22,7 +17,7 @@ func (h ScriptHostRunner) GetScript() (*Script, error) {
 	}
 
 	r := h.GetTokenReplacer()
-	config := h.Host.GetConfig()
+	config := h.Config
 	script_path := r.Replace(config.Repository.ScriptPath)
 	if script_path == "" {
 		return nil, NewInvalidArgumentError("script path not defined")
@@ -55,9 +50,9 @@ func (h ScriptHostRunner) GetScriptRunner(e Executor, s JobEventSender) (*Script
 
 func (h ScriptHostRunner) GetTokenReplacer() *strings.Replacer {
 	return strings.NewReplacer(
-		"{src}", h.Host.GetConfig().Repository.SourcePath,
-		"{out}", h.Host.GetConfig().Platform.BuildPath,
-		"{st}", h.Host.GetConfig().Host.StonesthrowPath)
+		"{src}", h.Config.Repository.SourcePath,
+		"{out}", h.Config.Platform.BuildPath,
+		"{st}", h.Config.Host.StonesthrowPath)
 }
 func (h ScriptHostRunner) ExpandTokens(in string) string {
 	return h.GetTokenReplacer().Replace(in)
@@ -70,6 +65,15 @@ func (h ScriptHostRunner) ExpandTokensInArray(in []string) []string {
 		out = append(out, r.Replace(s))
 	}
 	return out
+}
+
+func (h ScriptHostRunner) OnRepositoryCheckout(ctx context.Context, e Executor, s JobEventSender) error {
+	runner, err := h.GetScriptRunner(e, s)
+	if err != nil {
+		return err
+	}
+
+	return runner.OnRepositoryCheckout(ctx)
 }
 
 func (h ScriptHostRunner) ListScriptCommands(ctx context.Context, e Executor) (*CommandList, error) {

@@ -84,6 +84,10 @@ func (s ScriptRunner) ListCommands(ctx context.Context) (*CommandList, error) {
 	return &command_list, nil
 }
 
+func (s ScriptRunner) OnRepositoryCheckout(ctx context.Context) error {
+	return s.ExecutePassthrough(ctx, "--event", "checkout")
+}
+
 func (s ScriptRunner) ExecutePassthrough(ctx context.Context, args ...string) error {
 	return s.ExecuteInWorkDirPassthrough(s.ScriptPath, ctx, args...)
 }

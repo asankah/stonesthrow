@@ -16,13 +16,13 @@ type ConfigurationFile struct {
 
 func (c *ConfigurationFile) ReadFrom(filename string) error {
 	c.FileName = filename
+	c.HostsConfig.ConfigurationFile = c
 	return c.HostsConfig.ReadFrom(filename)
 }
 
+// Config describes a configuration where a host, repository and platform is
+// defined.
 type Config struct {
-	PlatformName   string // Platform string.
-	RepositoryName string // Repository.
-
 	Host       *HostConfig       // hostconfig for the remote end hosting |Platform|.
 	Repository *RepositoryConfig // RepositoryConfig for the remote end.
 	Platform   *PlatformConfig   // PlatformConfig for the local end.
@@ -38,31 +38,21 @@ func (c *Config) newError(s string, v ...interface{}) error {
 	return NewConfigurationError("Config file: %s: %s", configFile, fmt.Sprintf(s, v...))
 }
 
-func (c *Config) SelectLocalClientConfig(configFile *ConfigurationFile, serverPlatform string, repository string) error {
-	err := c.SelectServerConfig(configFile, serverPlatform, repository)
+func (c *Config) Select(host *HostConfig, repo *RepositoryConfig, platform *PlatformConfig) {
+	c.ConfigurationFile = host.HostsConfig.ConfigurationFile
+	c.Host = host
+	c.Repository = repo
+	c.Platform = platform
+}
+
+func (c *Config) SelectLocalClientConfig(configFile *ConfigurationFile, repository string) error {
+	err := c.SelectConfig(configFile, "", repository, "")
 	if err != nil {
 		return err
-	}
-
-	localhost, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-
-	var ok bool
-	c.Host, ok = configFile.HostsConfig.Hosts[localhost]
-	if !ok {
-		return c.newError("Can't determine local host config for %s", localhost)
-	}
-
-	c.Repository, ok = c.Host.Repositories[c.RepositoryName]
-	if !ok {
-		return c.newError("Can't determine local repository.")
 	}
 
 	// Resetting local platform since the local machine is not required to support the target plaform.
 	c.Platform = nil
-	c.PlatformName = ""
 	return nil
 }
 
@@ -106,70 +96,50 @@ func (c *Config) selectRepositoryFromCurrentDir(localhost string) (string, error
 	}
 }
 
-// ReadServerConfig reads the configuration from |filename| and populates the
-// receiver with the values corresponding to |platform| and |repository|.  It
-// returns an error if something went wrong, in which case the state of the
-// receiver is unknown.
-func (c *Config) SelectServerConfig(configFile *ConfigurationFile, platform string, repository string) error {
+func (c *Config) SelectConfig(configFile *ConfigurationFile, host, repository, platform string) error {
 	c.ConfigurationFile = configFile
-	c.PlatformName = platform
+	var bad_config_error = c.newError("can't determine configuration for host=%s, platform=%s, and repository=%s", host, platform, repository)
 
-	localhost, err := os.Hostname()
-	if err != nil {
-		return err
+	var err error
+	if host == "" {
+		localhost, err := os.Hostname()
+		if err != nil {
+			return c.newError("can't select localhost")
+		}
+		c.Host = configFile.HostsConfig.HostByName(localhost)
+
+		if platform != "" && repository != "" && !c.Host.SupportsPlatform(platform) {
+			c.Host = configFile.HostsConfig.HostForPlatform(repository, platform)
+		}
+	} else {
+		c.Host = configFile.HostsConfig.HostByName(host)
+	}
+
+	if c.Host == nil {
+		return bad_config_error
 	}
 
 	if repository == "" {
-		var err error
-		repository, err = c.selectRepositoryFromCurrentDir(localhost)
+		repository, err = c.selectRepositoryFromCurrentDir(host)
 		if err != nil {
 			return c.newError("can't select repository for current directory")
 		}
 	}
-
-	c.Host = configFile.HostsConfig.HostForPlatform(repository, platform, localhost)
-	if c.Host == nil {
-		return fmt.Errorf("%s is not a valid platform", c.PlatformName)
+	c.Repository, _ = c.Host.Repositories[repository]
+	if c.Repository == nil {
+		return bad_config_error
 	}
 
-	var ok bool
-	c.Repository, ok = c.Host.Repositories[repository]
-	if ok {
+	if platform == "" {
+		c.Platform = c.Repository.AnyPlatform()
+	} else {
 		c.Platform, _ = c.Repository.Platforms[platform]
 	}
 
-	if c.Host == nil || c.Repository == nil || c.Platform == nil {
-		return c.newError("Can't determine configuration for platform=%s and repository=%s", platform, repository)
-	}
-	c.RepositoryName = repository
-
-	return nil
-}
-
-func (c *Config) SelectPeerConfig(configFile *ConfigurationFile, hostname string, repository string) error {
-	c.ConfigurationFile = configFile
-	var ok bool
-	c.Host, ok = configFile.HostsConfig.Hosts[hostname]
-	if !ok {
-		return c.newError("Hostname %s cannot be resolved using %s", hostname, configFile.FileName)
-	}
-
-	c.Repository, ok = c.Host.Repositories[repository]
-	if !ok {
-		return c.newError("Repository %s cannot be resolved using %s", repository, configFile.FileName)
-	}
-
-	c.RepositoryName = c.Repository.Name
-
-	// Unlike a client configuration, a peer configuration uses a non-empty
-	// platform. It is expected that any platform will do since the peer
-	// configuration is only used to access the underlying repository. The
-	// plaform is only used as a means of locating an endpoint.
-	c.Platform = c.Repository.AnyPlatform()
 	if c.Platform == nil {
-		return c.newError("Peer repository for %s on %s doesn't have a usable platform.", repository, hostname)
+		return bad_config_error
 	}
-	c.PlatformName = c.Platform.Name
+
 	return nil
 }
 
@@ -189,7 +159,6 @@ func (c *Config) GetBuildPath(p ...string) string {
 
 func (c *Config) IsValid() bool {
 	return c.ConfigurationFile != nil &&
-		c.RepositoryName != "" &&
 		c.Repository != nil &&
 		c.Host != nil
 	// c.Platform is optional

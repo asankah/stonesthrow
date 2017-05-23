@@ -5,10 +5,14 @@ import (
 	"golang.org/x/net/context"
 )
 
+type RepositoryPlatformGetter interface {
+	GetRepository() string
+	GetPlatform() string
+}
+
 type BuildHostServerImpl struct {
-	Config       Config
+	Host         *HostConfig
 	ProcessAdder ProcessAdder
-	Script       Script
 }
 
 type PlatformBuildPassthroughConfig struct {
@@ -29,29 +33,49 @@ func (p PlatformBuildPassthroughConfig) AsJson() string {
 	return string(bytes)
 }
 
-func (p *BuildHostServerImpl) GetExecutor(s JobEventSender) Executor {
-	return NewJobEventExecutor(p.Config.Host.Name, p.Config.Platform.BuildPath, p.ProcessAdder, s)
+func (p *BuildHostServerImpl) GetRepositoryAndPlatform(g RepositoryPlatformGetter) (*RepositoryConfig, *PlatformConfig) {
+	repo_config, _ := p.Host.Repositories[g.GetRepository()]
+	if repo_config == nil {
+		return nil, nil
+	}
+
+	platform_config, _ := repo_config.Platforms[g.GetPlatform()]
+	if platform_config == nil {
+		return nil, nil
+	}
+
+	return repo_config, platform_config
+}
+
+func (p *BuildHostServerImpl) GetExecutor(s JobEventSender, platform_config *PlatformConfig) Executor {
+	return NewJobEventExecutor(p.Host.Name, platform_config.BuildPath, p.ProcessAdder, s)
 }
 
 func (p *BuildHostServerImpl) GetRepositoryHostServer() RepositoryHostServer {
-	return &RepositoryHostServerImpl{Repository: p.Config.Repository, ProcessAdder: p.ProcessAdder}
+	return &RepositoryHostServerImpl{Host: p.Host, ProcessAdder: p.ProcessAdder}
 }
 
-func (p *BuildHostServerImpl) GetScriptHostRunner() ScriptHostRunner {
-	return ScriptHostRunner{Host: p}
-}
-
-func (p *BuildHostServerImpl) GetConfig() *Config {
-	return &p.Config
+func (p *BuildHostServerImpl) GetScriptHostRunner(repo *RepositoryConfig, platform *PlatformConfig) ScriptHostRunner {
+	var runner ScriptHostRunner
+	runner.Config.Select(p.Host, repo, platform)
+	return runner
 }
 
 func (p *BuildHostServerImpl) RunScriptCommand(ro *RunOptions, s BuildHost_RunScriptCommandServer) error {
-	return p.GetScriptHostRunner().RunScriptCommand(ro, p.GetExecutor(s), s)
+	repo, platform := p.GetRepositoryAndPlatform(ro)
+	if repo == nil {
+		return NewInvalidPlatformError("repository %s and platform %s are invalid", ro.GetRepository(), ro.GetPlatform())
+	}
+	return p.GetScriptHostRunner(repo, platform).RunScriptCommand(ro, p.GetExecutor(s, platform), s)
 }
 
 func (p *BuildHostServerImpl) ListScriptCommands(
 	ctx context.Context, _ *ListCommandsOptions) (*CommandList, error) {
-	return p.GetScriptHostRunner().ListScriptCommands(ctx, p.GetExecutor(nil))
+	repo, platform := r.GetRepositoryAndPlatform(ro)
+	if repo == nil {
+		return NewInvalidPlatformError("repository %s and platform %s are invalid", ro.GetRepository(), ro.GetPlatform())
+	}
+	return p.GetScriptHostRunner(repo, platform).ListScriptCommands(ctx, p.GetExecutor(nil, platform))
 }
 
 func (p *BuildHostServerImpl) ListTargets(context.Context, *ListTargetsOptions) (*TargetList, error) {
@@ -59,13 +83,23 @@ func (p *BuildHostServerImpl) ListTargets(context.Context, *ListTargetsOptions) 
 }
 
 func (p *BuildHostServerImpl) RunShellCommand(ro *RunOptions, s BuildHost_RunShellCommandServer) error {
-	e := p.GetExecutor(s)
+	repo, platform := r.GetRepositoryAndPlatform(ro)
+	if repo == nil {
+		return NewInvalidPlatformError("repository %s and platform %s are invalid", ro.GetRepository(), ro.GetPlatform())
+	}
+
+	e := p.GetExecutor(s, platform)
+	script_runner := p.GetScriptHostRunner(repo, platform)
 	return e.ExecuteInWorkDirPassthrough(
-		p.GetScriptHostRunner().ExpandTokens(ro.GetCommand().GetDirectory()),
+		script_runner.ExpandTokens(ro.GetCommand().GetDirectory()),
 		s.Context(),
-		p.GetScriptHostRunner().ExpandTokensInArray(ro.GetCommand().GetCommand())...)
+		script_runner.ExpandTokensInArray(ro.GetCommand().GetCommand())...)
 }
 
 func (r *BuildHostServerImpl) FetchFile(fo *FetchFileOptions, s BuildHost_FetchFileServer) error {
-	return SendFiles(s.Context(), r.Config.Platform.BuildPath, fo, s)
+	repo, platform := r.GetRepositoryAndPlatform(fo)
+	if repo == nil {
+		return NewInvalidPlatformError("repository %s and platform %s are invalid", fo.GetRepository(), fo.GetPlatform())
+	}
+	return SendFiles(s.Context(), platform.BuildPath, fo, s)
 }

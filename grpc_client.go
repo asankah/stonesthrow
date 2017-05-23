@@ -73,10 +73,8 @@ func ConnectTo(ctx context.Context, client_config, server_config Config) (*grpc.
 	}
 
 	// If the server has an endpoint on the client machine, then talk to that endpoint.
-	for _, endpoint := range server_config.Platform.Endpoints {
-		if endpoint.Host == client_config.Host {
-			return connectToLocalEndpoint(ctx, client_config, server_config, endpoint)
-		}
+	if endpoint := server_config.Host.GetEndpointOnHost(client_config.Host); endpoint != nil {
+		return connectToLocalEndpoint(ctx, client_config, server_config, *endpoint)
 	}
 
 	// If we can ssh directly to the server, then do so.
@@ -88,10 +86,8 @@ func ConnectTo(ctx context.Context, client_config, server_config Config) (*grpc.
 
 	// Finally, if we can ssh to a host that has an endpoint for the target server, do so.
 	for _, remote := range client_config.Host.Remotes {
-		for _, endpoint := range server_config.Platform.Endpoints {
-			if endpoint.Host == remote.Host {
-				return connectViaSsh(ctx, client_config, server_config, *remote)
-			}
+		if endpoint := server_config.Host.GetEndpointOnHost(remote.Host); endpoint != nil {
+			return connectViaSsh(ctx, client_config, server_config, *remote)
 		}
 	}
 
@@ -100,14 +96,9 @@ func ConnectTo(ctx context.Context, client_config, server_config Config) (*grpc.
 }
 
 func RunPassthroughClient(client_config, server_config Config) error {
-	var endpoint Endpoint
-	for _, endpoint = range server_config.Platform.Endpoints {
-		if endpoint.Host == server_config.Host {
-			break
-		}
-	}
+	endpoint := server_config.Host.GetEndpointOnHost(server_config.Host)
 
-	if endpoint.Host != server_config.Host {
+	if endpoint == nil {
 		return NewInvalidPlatformError(
 			"Currently we only support a single hop for SSH passthrough. " +
 				"Hence the server must host the endpoint.")

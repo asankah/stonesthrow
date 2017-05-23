@@ -8,7 +8,8 @@ import (
 
 // HostConfig is the on-disk format for configuring Stonesthrow.
 type HostsConfig struct {
-	Hosts map[string]*HostConfig `json:"hosts"`
+	Hosts             map[string]*HostConfig `json:"hosts"`
+	ConfigurationFile *ConfigurationFile
 }
 
 func (h *HostsConfig) Normalize() error {
@@ -17,15 +18,15 @@ func (h *HostsConfig) Normalize() error {
 			continue
 		}
 		host_config.Name = host_name
-		for _, alias := range host_config.Alias {
-			existing_host, ok := h.Hosts[alias]
+		for _, nickname := range host_config.Nickname {
+			existing_host, ok := h.Hosts[nickname]
 			if ok && existing_host == host_config {
-				return fmt.Errorf("Alias %s is not unique. It's specified twice in %s", alias, existing_host.Name)
+				return fmt.Errorf("Nickname %s is not unique. It's specified twice in %s", nickname, existing_host.Name)
 			}
 			if ok {
-				return fmt.Errorf("Alias %s is not unique. It's already assigned to %s", alias, existing_host.Name)
+				return fmt.Errorf("Nickname %s is not unique. It's already assigned to %s", nickname, existing_host.Name)
 			}
-			h.Hosts[alias] = host_config
+			h.Hosts[nickname] = host_config
 		}
 	}
 
@@ -66,13 +67,8 @@ func (h *HostsConfig) ReadFrom(filename string) error {
 	return h.Normalize()
 }
 
-func (h *HostsConfig) HostForPlatform(repository string, platform string, localhost string) *HostConfig {
-	config, ok := h.Hosts[localhost]
-	if ok && config.SupportsPlatform(platform) {
-		return config
-	}
-
-	for _, config = range h.Hosts {
+func (h *HostsConfig) HostForPlatform(repository string, platform string) *HostConfig {
+	for _, config := range h.Hosts {
 		repo, ok := config.Repositories[repository]
 		if !ok {
 			continue
@@ -97,8 +93,8 @@ func (h *HostsConfig) HostByName(host string) *HostConfig {
 
 func (h *HostsConfig) ShortHost(host string) string {
 	config := h.HostByName(host)
-	if config == nil || len(config.Alias) == 0 {
+	if config == nil || len(config.Nickname) == 0 {
 		return host
 	}
-	return config.Alias[0]
+	return config.Nickname[0]
 }

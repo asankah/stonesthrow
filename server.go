@@ -6,27 +6,26 @@ import (
 	"net"
 )
 
-func getCredentialsForServer(server_config Config) (credentials.TransportCredentials, error) {
-	if server_config.Host.Certificates == nil || server_config.Host.Certificates.ServerCert == nil {
+func getCredentialsForHost(host_config *HostConfig) (credentials.TransportCredentials, error) {
+	if host_config.Certificates == nil || host_config.Certificates.ServerCert == nil {
 		return nil, NewConfigIncompleteError("can't locate server key and certificate")
 	}
 
-	return credentials.NewServerTLSFromFile(server_config.Host.Certificates.ServerCert.CertificateFile,
-		server_config.Host.Certificates.ServerCert.KeyFile)
+	return credentials.NewServerTLSFromFile(host_config.Certificates.ServerCert.CertificateFile,
+		host_config.Certificates.ServerCert.KeyFile)
 }
 
 func RunServer(Config Config) error {
 	service_host_server := ServiceHostServerImpl{Config: Config}
-	repository_host_server := RepositoryHostServerImpl{Config: Config, Repository: Config.Repository,
-		ProcessAdder: &service_host_server}
+	repository_host_server := RepositoryHostServerImpl{Config: Config, ProcessAdder: &service_host_server}
 	platform_build_server := BuildHostServerImpl{Config: Config, ProcessAdder: &service_host_server}
 
-	creds, err := getCredentialsForServer(Config)
+	creds, err := getCredentialsForHost(Config.Host)
 	if err != nil {
 		return err
 	}
 
-	endpoint := Config.Platform.EndpointFor(Config.Host)
+	endpoint := Config.Host.GetEndpointOnHost(Config.Host)
 	if endpoint == nil {
 		return NewInvalidPlatformError("platform has no endpoint here")
 	}

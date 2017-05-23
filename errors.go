@@ -38,6 +38,7 @@ var (
 	NewInvalidWrappedMessageTypeError, IsInvalidWrappedMessageTypeError = NewErrorClass("invalid message type during unwrap")
 	NewInvalidMessageTypeError, IsInvalidMessageTypeError               = NewErrorClass("invalid message type during wrap")
 	NewInvalidPlatformError, IsInvalidPlatformError                     = NewErrorClass("invalid platform")
+	NewInvalidRepositoryError, IsInvalidRepositoryError                 = NewErrorClass("invalid repository")
 	NewNoRouteToTargetError, IsNoRouteToTargetError                     = NewErrorClass("no route to target host")
 	NewNoTargetError, IsNoTargetError                                   = NewErrorClass("no target specified")
 	NewNoUpstreamError, IsNoUpstreamError                               = NewErrorClass("no upstream configured for this repository")
