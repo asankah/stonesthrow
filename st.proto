@@ -118,10 +118,11 @@ message BranchList {
 }
 
 message RunOptions {
-  string platform = 1;
-  RepositoryState repository_state = 2;
-  TargetList dependencies = 3;
-  ShellCommand command = 4;
+  string repository = 1;
+  string revision = 2;
+  string platform = 3;
+  TargetList dependencies = 4;
+  ShellCommand command = 5;
 }
 
 message PingOptions {

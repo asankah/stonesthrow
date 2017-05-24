@@ -17,8 +17,8 @@ func getCredentialsForHost(host_config *HostConfig) (credentials.TransportCreden
 
 func RunServer(Config Config) error {
 	service_host_server := ServiceHostServerImpl{Config: Config}
-	repository_host_server := RepositoryHostServerImpl{Config: Config, ProcessAdder: &service_host_server}
-	platform_build_server := BuildHostServerImpl{Config: Config, ProcessAdder: &service_host_server}
+	repository_host_server := RepositoryHostServerImpl{Host: Config.Host, ProcessAdder: &service_host_server}
+	platform_build_server := BuildHostServerImpl{Host: Config.Host, ProcessAdder: &service_host_server}
 
 	creds, err := getCredentialsForHost(Config.Host)
 	if err != nil {

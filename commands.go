@@ -233,8 +233,9 @@ E.g.:
 				return err
 			}
 			run_options := RunOptions{
-				Platform:        conn.ServerConfig.Platform.Name,
-				RepositoryState: repo_state,
+				Repository: repo_state.Repository,
+				Revision:   repo_state.Revision,
+				Platform:   conn.ServerConfig.Platform.Name,
 				Command: &ShellCommand{
 					Directory: Flag_TargetPath,
 					Command:   f.Args()}}
@@ -482,8 +483,9 @@ func RegisterRemoteCommands(ctx context.Context, conn *ClientConnection, command
 
 				args := append([]string{command_name}, f.Args()...)
 				ro := RunOptions{
-					Platform:        conn.ServerConfig.Platform.Name,
-					RepositoryState: repo_state,
+					Repository: repo_state.Repository,
+					Revision:   repo_state.Revision,
+					Platform:   conn.ServerConfig.Platform.Name,
 					Command: &ShellCommand{
 						Command:   args,
 						Directory: "{out}"}}

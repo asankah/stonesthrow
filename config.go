@@ -38,6 +38,13 @@ func (c *Config) newError(s string, v ...interface{}) error {
 	return NewConfigurationError("Config file: %s: %s", configFile, fmt.Sprintf(s, v...))
 }
 
+func (c *Config) SelectRepository(repo *RepositoryConfig) {
+	c.ConfigurationFile = repo.Host.HostsConfig.ConfigurationFile
+	c.Host = repo.Host
+	c.Repository = repo
+	c.Platform = repo.AnyPlatform()
+}
+
 func (c *Config) Select(host *HostConfig, repo *RepositoryConfig, platform *PlatformConfig) {
 	c.ConfigurationFile = host.HostsConfig.ConfigurationFile
 	c.Host = host

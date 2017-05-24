@@ -175,7 +175,7 @@ func (f *ConsoleFormatter) GetTemplate(name string, templateValue string) (*temp
 			return strings.Split(s, "\n")
 		},
 		"platform": func() string {
-			return f.config.PlatformName
+			return f.config.Platform.Name
 		},
 		"seconds": func(d time.Duration) string {
 			return fmt.Sprintf("%2.2f", time.Duration(d).Seconds())

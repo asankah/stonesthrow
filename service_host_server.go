@@ -46,8 +46,8 @@ func (h *ServiceHostServerImpl) SelfUpdate(o *SelfUpdateOptions, s ServiceHost_S
 		"-package", "github.com/asankah/stonesthrow",
 		"--",
 		"st_host",
-		"-platform", h.Config.PlatformName,
-		"-repository", h.Config.RepositoryName,
+		"-platform", h.Config.Platform.Name,
+		"-repository", h.Config.Repository.Name,
 		"-config", h.Config.ConfigurationFile.FileName}
 	h.Shutdown(&ShutdownOptions{}, s)
 	cmd := exec.Command(updater_command[0], updater_command[1:]...)

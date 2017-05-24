@@ -1,7 +1,6 @@
 package stonesthrow
 
 import (
-	"encoding/json"
 	"golang.org/x/net/context"
 )
 
@@ -13,24 +12,6 @@ type RepositoryPlatformGetter interface {
 type BuildHostServerImpl struct {
 	Host         *HostConfig
 	ProcessAdder ProcessAdder
-}
-
-type PlatformBuildPassthroughConfig struct {
-	PlatformConfig
-	SourcePath     string `json:"source_path"`
-	BuildPath      string `json:"build_path"`
-	PlatformName   string `json:"platform_name"`
-	RepositoryName string `json:"repository_name"`
-	GomaPath       string `json:"goma_path"`
-	MaxBuildJobs   int    `json:"max_build_jobs"`
-}
-
-func (p PlatformBuildPassthroughConfig) AsJson() string {
-	bytes, err := json.Marshal(p)
-	if err != nil {
-		return ""
-	}
-	return string(bytes)
 }
 
 func (p *BuildHostServerImpl) GetRepositoryAndPlatform(g RepositoryPlatformGetter) (*RepositoryConfig, *PlatformConfig) {
@@ -69,11 +50,10 @@ func (p *BuildHostServerImpl) RunScriptCommand(ro *RunOptions, s BuildHost_RunSc
 	return p.GetScriptHostRunner(repo, platform).RunScriptCommand(ro, p.GetExecutor(s, platform), s)
 }
 
-func (p *BuildHostServerImpl) ListScriptCommands(
-	ctx context.Context, _ *ListCommandsOptions) (*CommandList, error) {
-	repo, platform := r.GetRepositoryAndPlatform(ro)
+func (p *BuildHostServerImpl) ListScriptCommands(ctx context.Context, l *ListCommandsOptions) (*CommandList, error) {
+	repo, platform := p.GetRepositoryAndPlatform(l)
 	if repo == nil {
-		return NewInvalidPlatformError("repository %s and platform %s are invalid", ro.GetRepository(), ro.GetPlatform())
+		return nil, NewInvalidPlatformError("repository %s and platform %s are invalid", l.GetRepository(), l.GetPlatform())
 	}
 	return p.GetScriptHostRunner(repo, platform).ListScriptCommands(ctx, p.GetExecutor(nil, platform))
 }
@@ -83,7 +63,7 @@ func (p *BuildHostServerImpl) ListTargets(context.Context, *ListTargetsOptions) 
 }
 
 func (p *BuildHostServerImpl) RunShellCommand(ro *RunOptions, s BuildHost_RunShellCommandServer) error {
-	repo, platform := r.GetRepositoryAndPlatform(ro)
+	repo, platform := p.GetRepositoryAndPlatform(ro)
 	if repo == nil {
 		return NewInvalidPlatformError("repository %s and platform %s are invalid", ro.GetRepository(), ro.GetPlatform())
 	}

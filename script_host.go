@@ -2,13 +2,33 @@ package stonesthrow
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 )
 
 type ScriptHostRunner struct {
-	Config Config
-	Script Script
+	Config       Config
+	Script       Script
+	ProcessAdder ProcessAdder
+}
+
+type PlatformBuildPassthroughConfig struct {
+	PlatformConfig
+	SourcePath     string `json:"source_path"`
+	BuildPath      string `json:"build_path"`
+	PlatformName   string `json:"platform_name"`
+	RepositoryName string `json:"repository_name"`
+	GomaPath       string `json:"goma_path"`
+	MaxBuildJobs   int    `json:"max_build_jobs"`
+}
+
+func (p PlatformBuildPassthroughConfig) AsJson() string {
+	bytes, err := json.Marshal(p)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
 }
 
 func (h ScriptHostRunner) GetScript() (*Script, error) {
@@ -106,7 +126,9 @@ func (h ScriptHostRunner) RunScriptCommand(ro *RunOptions, e Executor, s JobEven
 	}
 
 	if needs_source {
-		err = h.Host.GetRepositoryHostServer().SyncRemote(ro.GetRepositoryState(), s)
+		repository_host := RepositoryHostServerImpl{Host: h.Config.Host, ProcessAdder: h.ProcessAdder}
+		repository_state := RepositoryState{Repository: ro.Repository, Revision: ro.Revision}
+		err = repository_host.SyncRemote(&repository_state, s)
 		if err != nil {
 			return err
 		}

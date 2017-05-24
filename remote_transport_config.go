@@ -36,7 +36,7 @@ func (r *RemoteTransportConfig) GetCommand(server *Config) []string {
 
 	return append(command, "-T",
 		fmt.Sprintf("%s/bin/st_client", r.Host.GoPath),
-		"--platform", server.PlatformName,
-		"--repository", server.RepositoryName,
+		"--platform", server.Platform.Name,
+		"--repository", server.Repository.Name,
 		"passthrough")
 }
