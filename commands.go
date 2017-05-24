@@ -63,7 +63,7 @@ func (c ClientConnection) IsRemote() bool {
 
 func (c *ClientConnection) SetupTopLevelFlags(f *flag.FlagSet) {
 	default_server_platform := path.Base(os.Args[0])
-	default_config_file := GetDefaultConfigFile()
+	default_config_file := GetDefaultConfigFileName()
 
 	f.StringVar(&c.platform, "platform", default_server_platform, "target server platform.")
 	f.StringVar(&c.repository, "repository", "", "repository name. defaults to the repository corresponding to the current directory.")
@@ -86,12 +86,12 @@ func (c *ClientConnection) InitFromFlags(ctx context.Context, f *flag.FlagSet) e
 		return err
 	}
 
-	err = server_config.SelectConfig(&config_file, "", c.repository, c.platform)
+	err = server_config.Select(&config_file, "", c.repository, c.platform)
 	if err != nil {
 		return err
 	}
 
-	err = client_config.SelectLocalClientConfig(&config_file, c.repository)
+	err = client_config.SelectForClient(&config_file, c.repository)
 	if err != nil {
 		return err
 	}

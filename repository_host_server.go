@@ -17,7 +17,7 @@ type RepositoryGetter interface {
 	GetRepository() string
 }
 
-func (r *RepositoryHostServerImpl) GetRepository(rg RepositoryGetter) (*RepositoryConfig, error) {
+func (r *RepositoryHostServerImpl) getRepository(rg RepositoryGetter) (*RepositoryConfig, error) {
 	repo_name := rg.GetRepository()
 	repo, ok := r.Host.Repositories[repo_name]
 	if !ok {
@@ -26,32 +26,28 @@ func (r *RepositoryHostServerImpl) GetRepository(rg RepositoryGetter) (*Reposito
 	return repo, nil
 }
 
-func (r *RepositoryHostServerImpl) GetExecutor(s JobEventSender, repo *RepositoryConfig) Executor {
+func (r *RepositoryHostServerImpl) getExecutor(s JobEventSender, repo *RepositoryConfig) Executor {
 	return NewJobEventExecutor(repo.Host.Name, repo.SourcePath, r.ProcessAdder, s)
 }
 
-func (r *RepositoryHostServerImpl) GetRepositoryHostServer() RepositoryHostServer {
-	return r
-}
-
-func (r *RepositoryHostServerImpl) GetScriptHostRunner(repo *RepositoryConfig) ScriptHostRunner {
+func (r *RepositoryHostServerImpl) getScriptHostRunner(repo *RepositoryConfig) ScriptHost {
 	var config Config
-	config.Select(r.Host, repo, repo.AnyPlatform())
-	return ScriptHostRunner{Config: config, ProcessAdder: r.ProcessAdder}
+	config.Set(r.Host, repo, repo.AnyPlatform())
+	return ScriptHost{Config: config, ProcessAdder: r.ProcessAdder}
 }
 
 func (r *RepositoryHostServerImpl) GetGitCommandsForJobEventSender(s JobEventSender, repo *RepositoryConfig) (Executor, RepositoryCommands) {
-	executor := r.GetExecutor(s, repo)
+	executor := r.getExecutor(s, repo)
 	commands := RepositoryCommands{Repository: repo, Executor: executor}
 	return executor, commands
 }
 
 func (r *RepositoryHostServerImpl) GetRepositoryUpstreamPeer(ctx context.Context, repo *RepositoryConfig) (RepositoryHostClient, error) {
 	var remote_config Config
-	remote_config.SelectRepository(repo.GitConfig.RemoteHost.Repositories[repo.Name])
+	remote_config.SetRepository(repo.GitConfig.RemoteHost.Repositories[repo.Name])
 
 	var local_config Config
-	local_config.SelectRepository(repo)
+	local_config.SetRepository(repo)
 
 	rpc_connection, err := ConnectTo(ctx, local_config, remote_config)
 	if err != nil {
@@ -79,7 +75,7 @@ func SelectMatchingBranchConfigs(branches []string, branch_configs []*GitReposit
 }
 
 func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, co *BranchConfigOptions) (*GitRepositoryInfo, error) {
-	repo, err := r.GetRepository(co)
+	repo, err := r.getRepository(co)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +208,7 @@ func (r *RepositoryHostServerImpl) GetBranchConfig(ctx context.Context, co *Bran
 
 func (r *RepositoryHostServerImpl) SetBranchConfig(info *GitRepositoryInfo, s RepositoryHost_SetBranchConfigServer) error {
 
-	repo, err := r.GetRepository(info)
+	repo, err := r.getRepository(info)
 	if err != nil {
 		return err
 	}
@@ -241,7 +237,7 @@ func (r *RepositoryHostServerImpl) SetBranchConfig(info *GitRepositoryInfo, s Re
 }
 
 func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s RepositoryHost_PullFromUpstreamServer) error {
-	repo, err := r.GetRepository(list)
+	repo, err := r.getRepository(list)
 	if err != nil {
 		return err
 	}
@@ -286,7 +282,7 @@ func (r *RepositoryHostServerImpl) PullFromUpstream(list *BranchList, s Reposito
 }
 
 func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s RepositoryHost_PushToUpstreamServer) error {
-	repo, err := r.GetRepository(list)
+	repo, err := r.getRepository(list)
 	if err != nil {
 		return err
 	}
@@ -342,7 +338,7 @@ func (r *RepositoryHostServerImpl) PushToUpstream(list *BranchList, s Repository
 }
 
 func (r *RepositoryHostServerImpl) Status(rs *RepositoryState, s RepositoryHost_StatusServer) error {
-	repo, err := r.GetRepository(rs)
+	repo, err := r.getRepository(rs)
 	if err != nil {
 		return err
 	}
@@ -351,7 +347,7 @@ func (r *RepositoryHostServerImpl) Status(rs *RepositoryState, s RepositoryHost_
 }
 
 func (r *RepositoryHostServerImpl) SyncRemote(rs *RepositoryState, s RepositoryHost_SyncRemoteServer) error {
-	repo, err := r.GetRepository(rs)
+	repo, err := r.getRepository(rs)
 	if err != nil {
 		return err
 	}
@@ -364,11 +360,11 @@ func (r *RepositoryHostServerImpl) SyncRemote(rs *RepositoryState, s RepositoryH
 		return err
 	}
 
-	return r.GetScriptHostRunner(repo).OnRepositoryCheckout(s.Context(), r.GetExecutor(s, repo), s)
+	return r.getScriptHostRunner(repo).OnRepositoryCheckout(s.Context(), r.getExecutor(s, repo), s)
 }
 
 func (r *RepositoryHostServerImpl) PrepareForReceive(rs *RepositoryState, s RepositoryHost_PrepareForReceiveServer) error {
-	repo, err := r.GetRepository(rs)
+	repo, err := r.getRepository(rs)
 	if err != nil {
 		return err
 	}
@@ -377,7 +373,7 @@ func (r *RepositoryHostServerImpl) PrepareForReceive(rs *RepositoryState, s Repo
 }
 
 func (r *RepositoryHostServerImpl) FetchFile(fo *FetchFileOptions, s RepositoryHost_FetchFileServer) error {
-	repo, err := r.GetRepository(fo)
+	repo, err := r.getRepository(fo)
 	if err != nil {
 		return err
 	}
@@ -385,29 +381,29 @@ func (r *RepositoryHostServerImpl) FetchFile(fo *FetchFileOptions, s RepositoryH
 }
 
 func (r *RepositoryHostServerImpl) RunScriptCommand(ro *RunOptions, s RepositoryHost_RunScriptCommandServer) error {
-	repo, err := r.GetRepository(ro)
+	repo, err := r.getRepository(ro)
 	if err != nil {
 		return err
 	}
-	return r.GetScriptHostRunner(repo).RunScriptCommand(ro, r.GetExecutor(s, repo), s)
+	return r.getScriptHostRunner(repo).RunScriptCommand(ro, r.getExecutor(s, repo), s)
 }
 
 func (r *RepositoryHostServerImpl) ListScriptCommands(ctx context.Context, l *ListCommandsOptions) (*CommandList, error) {
-	repo, err := r.GetRepository(l)
+	repo, err := r.getRepository(l)
 	if err != nil {
 		return nil, err
 	}
 
-	return r.GetScriptHostRunner(repo).ListScriptCommands(ctx, r.GetExecutor(nil, repo))
+	return r.getScriptHostRunner(repo).ListScriptCommands(ctx, r.getExecutor(nil, repo))
 }
 
 func (r *RepositoryHostServerImpl) RunShellCommand(ro *RunOptions, s RepositoryHost_RunShellCommandServer) error {
-	repo, err := r.GetRepository(ro)
+	repo, err := r.getRepository(ro)
 	if err != nil {
 		return err
 	}
-	e := r.GetExecutor(s, repo)
-	script_host_runner := r.GetScriptHostRunner(repo)
+	e := r.getExecutor(s, repo)
+	script_host_runner := r.getScriptHostRunner(repo)
 	return e.ExecuteInWorkDirPassthrough(
 		script_host_runner.ExpandTokens(ro.GetCommand().GetDirectory()),
 		s.Context(),

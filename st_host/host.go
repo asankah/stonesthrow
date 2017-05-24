@@ -10,7 +10,7 @@ import (
 func main() {
 	platform := flag.String("platform", "", "Platform to use. See code for valid platform values.")
 	repository := flag.String("repository", "", "Repository to use.")
-	configFileName := flag.String("config", stonesthrow.GetDefaultConfigFile(), "Configuration file to use.")
+	configFileName := flag.String("config", stonesthrow.GetDefaultConfigFileName(), "Configuration file to use.")
 	flag.Parse()
 
 	if *platform == "" || *configFileName == "" {
@@ -25,7 +25,7 @@ func main() {
 	}
 
 	var config stonesthrow.Config
-	err = config.SelectConfig(&configFile, "", *platform, *repository)
+	err = config.Select(&configFile, "", *platform, *repository)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

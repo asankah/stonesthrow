@@ -7,13 +7,13 @@ import (
 	"strings"
 )
 
-type ScriptHostRunner struct {
+type ScriptHost struct {
 	Config       Config
 	Script       Script
 	ProcessAdder ProcessAdder
 }
 
-type PlatformBuildPassthroughConfig struct {
+type ScriptConfig struct {
 	PlatformConfig
 	SourcePath     string `json:"source_path"`
 	BuildPath      string `json:"build_path"`
@@ -23,7 +23,7 @@ type PlatformBuildPassthroughConfig struct {
 	MaxBuildJobs   int    `json:"max_build_jobs"`
 }
 
-func (p PlatformBuildPassthroughConfig) AsJson() string {
+func (p ScriptConfig) AsJson() string {
 	bytes, err := json.Marshal(p)
 	if err != nil {
 		return ""
@@ -31,7 +31,7 @@ func (p PlatformBuildPassthroughConfig) AsJson() string {
 	return string(bytes)
 }
 
-func (h ScriptHostRunner) GetScript() (*Script, error) {
+func (h ScriptHost) getScript() (*Script, error) {
 	if h.Script.ScriptName != "" {
 		return &h.Script, nil
 	}
@@ -47,7 +47,7 @@ func (h ScriptHostRunner) GetScript() (*Script, error) {
 		ScriptPath:      filepath.Dir(script_path),
 		ScriptName:      filepath.Base(script_path),
 		StonesthrowPath: config.Host.StonesthrowPath,
-		Config: PlatformBuildPassthroughConfig{
+		Config: ScriptConfig{
 			PlatformConfig: *config.Platform,
 			SourcePath:     config.Repository.SourcePath,
 			BuildPath:      config.Platform.BuildPath,
@@ -59,8 +59,8 @@ func (h ScriptHostRunner) GetScript() (*Script, error) {
 	return &h.Script, nil
 }
 
-func (h ScriptHostRunner) GetScriptRunner(e Executor, s JobEventSender) (*ScriptRunner, error) {
-	script, err := h.GetScript()
+func (h ScriptHost) GetScriptRunner(e Executor, s JobEventSender) (*ScriptExecutor, error) {
+	script, err := h.getScript()
 	if err != nil {
 		return nil, err
 	}
@@ -68,17 +68,17 @@ func (h ScriptHostRunner) GetScriptRunner(e Executor, s JobEventSender) (*Script
 	return &script_runner, nil
 }
 
-func (h ScriptHostRunner) GetTokenReplacer() *strings.Replacer {
+func (h ScriptHost) GetTokenReplacer() *strings.Replacer {
 	return strings.NewReplacer(
 		"{src}", h.Config.Repository.SourcePath,
 		"{out}", h.Config.Platform.BuildPath,
 		"{st}", h.Config.Host.StonesthrowPath)
 }
-func (h ScriptHostRunner) ExpandTokens(in string) string {
+func (h ScriptHost) ExpandTokens(in string) string {
 	return h.GetTokenReplacer().Replace(in)
 }
 
-func (h ScriptHostRunner) ExpandTokensInArray(in []string) []string {
+func (h ScriptHost) ExpandTokensInArray(in []string) []string {
 	r := h.GetTokenReplacer()
 	out := []string{}
 	for _, s := range in {
@@ -87,7 +87,7 @@ func (h ScriptHostRunner) ExpandTokensInArray(in []string) []string {
 	return out
 }
 
-func (h ScriptHostRunner) OnRepositoryCheckout(ctx context.Context, e Executor, s JobEventSender) error {
+func (h ScriptHost) OnRepositoryCheckout(ctx context.Context, e Executor, s JobEventSender) error {
 	runner, err := h.GetScriptRunner(e, s)
 	if err != nil {
 		return err
@@ -96,7 +96,7 @@ func (h ScriptHostRunner) OnRepositoryCheckout(ctx context.Context, e Executor, 
 	return runner.OnRepositoryCheckout(ctx)
 }
 
-func (h ScriptHostRunner) ListScriptCommands(ctx context.Context, e Executor) (*CommandList, error) {
+func (h ScriptHost) ListScriptCommands(ctx context.Context, e Executor) (*CommandList, error) {
 	runner, err := h.GetScriptRunner(e, nil)
 	if err != nil {
 		return nil, err
@@ -110,7 +110,7 @@ func (h ScriptHostRunner) ListScriptCommands(ctx context.Context, e Executor) (*
 	return command_list, nil
 }
 
-func (h ScriptHostRunner) RunScriptCommand(ro *RunOptions, e Executor, s JobEventServer) error {
+func (h ScriptHost) RunScriptCommand(ro *RunOptions, e Executor, s JobEventServer) error {
 	if len(ro.GetCommand().GetCommand()) == 0 {
 		return NewInvalidArgumentError("no arguments specified for command")
 	}

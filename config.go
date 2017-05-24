@@ -38,22 +38,28 @@ func (c *Config) newError(s string, v ...interface{}) error {
 	return NewConfigurationError("Config file: %s: %s", configFile, fmt.Sprintf(s, v...))
 }
 
-func (c *Config) SelectRepository(repo *RepositoryConfig) {
+func (c *Config) SetRepository(repo *RepositoryConfig) {
 	c.ConfigurationFile = repo.Host.HostsConfig.ConfigurationFile
 	c.Host = repo.Host
 	c.Repository = repo
 	c.Platform = repo.AnyPlatform()
 }
 
-func (c *Config) Select(host *HostConfig, repo *RepositoryConfig, platform *PlatformConfig) {
+func (c *Config) Set(host *HostConfig, repo *RepositoryConfig, platform *PlatformConfig) {
 	c.ConfigurationFile = host.HostsConfig.ConfigurationFile
 	c.Host = host
 	c.Repository = repo
 	c.Platform = platform
+
+	if c.Host != c.Repository.Host ||
+		c.Platform.Repository != c.Repository ||
+		c.Host.HostsConfig.ConfigurationFile != c.ConfigurationFile {
+		panic("Mismatch between host, repository, and platform")
+	}
 }
 
-func (c *Config) SelectLocalClientConfig(configFile *ConfigurationFile, repository string) error {
-	err := c.SelectConfig(configFile, "", repository, "")
+func (c *Config) SelectForClient(configFile *ConfigurationFile, repository string) error {
+	err := c.Select(configFile, "", repository, "")
 	if err != nil {
 		return err
 	}
@@ -103,9 +109,11 @@ func (c *Config) selectRepositoryFromCurrentDir(localhost string) (string, error
 	}
 }
 
-func (c *Config) SelectConfig(configFile *ConfigurationFile, host, repository, platform string) error {
+func (c *Config) Select(configFile *ConfigurationFile, host, repository, platform string) error {
 	c.ConfigurationFile = configFile
-	var bad_config_error = c.newError("can't determine configuration for host=%s, platform=%s, and repository=%s", host, platform, repository)
+	var bad_config_error = c.newError(
+		"can't determine configuration for host=%s, platform=%s, and repository=%s",
+		host, platform, repository)
 
 	var err error
 	if host == "" {
@@ -115,7 +123,7 @@ func (c *Config) SelectConfig(configFile *ConfigurationFile, host, repository, p
 		}
 		c.Host = configFile.HostsConfig.HostByName(localhost)
 
-		if platform != "" && repository != "" && !c.Host.SupportsPlatform(platform) {
+		if platform != "" && repository != "" && c.Host != nil && !c.Host.SupportsPlatform(platform) {
 			c.Host = configFile.HostsConfig.HostForPlatform(repository, platform)
 		}
 	} else {
@@ -214,8 +222,8 @@ Repository:{{with .Repository}}
 	t.Execute(writer, c)
 }
 
-// GetDefaultConfigFile() returns the platform specific default configuration file path.
-func GetDefaultConfigFile() string {
+// GetDefaultConfigFileName() returns the platform specific default configuration file path.
+func GetDefaultConfigFileName() string {
 	if runtime.GOOS == "windows" {
 		return os.ExpandEnv("${APPDATA}\\StonesThrow.cfg")
 	}

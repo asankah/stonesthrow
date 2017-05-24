@@ -27,13 +27,13 @@ func (s Script) GetScriptRunnerCommand(args ...string) []string {
 		"--config", s.Config.AsJson()}, args...)
 }
 
-type ScriptRunner struct {
+type ScriptExecutor struct {
 	Script
 	Executor Executor
 }
 
-func (s Script) GetScriptRunner(e Executor) ScriptRunner {
-	return ScriptRunner{
+func (s Script) GetScriptRunner(e Executor) ScriptExecutor {
+	return ScriptExecutor{
 		Script{
 			ScriptPath:      s.ScriptPath,
 			ScriptName:      s.ScriptName,
@@ -41,7 +41,7 @@ func (s Script) GetScriptRunner(e Executor) ScriptRunner {
 			Config:          s.Config}, e}
 }
 
-func (s ScriptRunner) Validate() error {
+func (s ScriptExecutor) Validate() error {
 	if s.ScriptPath == "" || s.ScriptName == "" || s.Executor == nil || s.StonesthrowPath == "" {
 		return NewConfigIncompleteError("script configuration incomplete")
 	}
@@ -51,7 +51,7 @@ func (s ScriptRunner) Validate() error {
 	return nil
 }
 
-func (s ScriptRunner) NeedsSource(ctx context.Context, args ...string) (bool, error) {
+func (s ScriptExecutor) NeedsSource(ctx context.Context, args ...string) (bool, error) {
 	type BoolContainer struct {
 		Result bool `json:"result"`
 	}
@@ -69,7 +69,7 @@ func (s ScriptRunner) NeedsSource(ctx context.Context, args ...string) (bool, er
 	return bool_container.Result, nil
 }
 
-func (s ScriptRunner) ListCommands(ctx context.Context) (*CommandList, error) {
+func (s ScriptExecutor) ListCommands(ctx context.Context) (*CommandList, error) {
 	output, err := s.ExecuteNoStream(ctx, "--list-commands")
 	if err != nil {
 		return nil, err
@@ -84,15 +84,15 @@ func (s ScriptRunner) ListCommands(ctx context.Context) (*CommandList, error) {
 	return &command_list, nil
 }
 
-func (s ScriptRunner) OnRepositoryCheckout(ctx context.Context) error {
+func (s ScriptExecutor) OnRepositoryCheckout(ctx context.Context) error {
 	return s.ExecutePassthrough(ctx, "--event", "checkout")
 }
 
-func (s ScriptRunner) ExecutePassthrough(ctx context.Context, args ...string) error {
+func (s ScriptExecutor) ExecutePassthrough(ctx context.Context, args ...string) error {
 	return s.ExecuteInWorkDirPassthrough(s.ScriptPath, ctx, args...)
 }
 
-func (s ScriptRunner) ExecuteInWorkDirPassthrough(work_dir string, ctx context.Context, args ...string) error {
+func (s ScriptExecutor) ExecuteInWorkDirPassthrough(work_dir string, ctx context.Context, args ...string) error {
 	err := s.Validate()
 	if err != nil {
 		return err
@@ -100,11 +100,11 @@ func (s ScriptRunner) ExecuteInWorkDirPassthrough(work_dir string, ctx context.C
 	return s.Executor.ExecuteInWorkDirPassthrough(work_dir, ctx, s.GetScriptRunnerCommand(args...)...)
 }
 
-func (s ScriptRunner) Execute(ctx context.Context, args ...string) (string, error) {
+func (s ScriptExecutor) Execute(ctx context.Context, args ...string) (string, error) {
 	return s.ExecuteInWorkDir(s.ScriptPath, ctx, args...)
 }
 
-func (s ScriptRunner) ExecuteInWorkDir(work_dir string, ctx context.Context, args ...string) (string, error) {
+func (s ScriptExecutor) ExecuteInWorkDir(work_dir string, ctx context.Context, args ...string) (string, error) {
 	err := s.Validate()
 	if err != nil {
 		return "", err
@@ -112,11 +112,11 @@ func (s ScriptRunner) ExecuteInWorkDir(work_dir string, ctx context.Context, arg
 	return s.Executor.ExecuteInWorkDir(work_dir, ctx, s.GetScriptRunnerCommand(args...)...)
 }
 
-func (s ScriptRunner) ExecuteNoStream(ctx context.Context, args ...string) (string, error) {
+func (s ScriptExecutor) ExecuteNoStream(ctx context.Context, args ...string) (string, error) {
 	return s.ExecuteInWorkDirNoStream(s.ScriptPath, ctx, args...)
 }
 
-func (s ScriptRunner) ExecuteInWorkDirNoStream(work_dir string, ctx context.Context, args ...string) (string, error) {
+func (s ScriptExecutor) ExecuteInWorkDirNoStream(work_dir string, ctx context.Context, args ...string) (string, error) {
 	err := s.Validate()
 	if err != nil {
 		return "", err

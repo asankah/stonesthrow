@@ -15,7 +15,7 @@ func TestConfig_ReadFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = c.SelectServerConfig(&cf, "linux", "chrome")
+	err = c.Select(&cf, "a.foo.example.com", "chrome", "linux")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,12 +24,47 @@ func TestConfig_ReadFrom(t *testing.T) {
 		t.Fatal("ConfigurationFile")
 	}
 
-	if c.PlatformName != "linux" {
+	if c.Platform.Name != "linux" {
 		t.Fatal("Platform")
 	}
 
-	err = c.SelectServerConfig(&cf, "chromeos", "chrome")
+	err = c.Select(&cf, "a.foo.example.com", "chrome", "chromeos")
 	if err == nil {
 		t.Fatal("Should've failed to load non-existent platform")
+	}
+}
+
+func TestConfig_SelectRepository(t *testing.T) {
+	var cf ConfigurationFile
+	var c Config
+	path := filepath.Join("testdata", "config-basic.json")
+
+	err := cf.ReadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = c.Select(&cf, "a", "chrome", "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var d Config
+	d.SetRepository(c.Repository)
+
+	if d.ConfigurationFile != &cf {
+		t.Fatal("ConfigurationFile")
+	}
+
+	if d.Host != c.Host {
+		t.Fatal("Host")
+	}
+
+	if d.Repository != c.Repository {
+		t.Fatal("Repository")
+	}
+
+	if d.Platform == nil {
+		t.Fatal("Platform")
 	}
 }

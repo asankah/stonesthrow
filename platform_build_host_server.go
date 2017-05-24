@@ -36,9 +36,9 @@ func (p *BuildHostServerImpl) GetRepositoryHostServer() RepositoryHostServer {
 	return &RepositoryHostServerImpl{Host: p.Host, ProcessAdder: p.ProcessAdder}
 }
 
-func (p *BuildHostServerImpl) GetScriptHostRunner(repo *RepositoryConfig, platform *PlatformConfig) ScriptHostRunner {
-	var runner ScriptHostRunner
-	runner.Config.Select(p.Host, repo, platform)
+func (p *BuildHostServerImpl) GetScriptHostRunner(repo *RepositoryConfig, platform *PlatformConfig) ScriptHost {
+	var runner ScriptHost
+	runner.Config.Set(p.Host, repo, platform)
 	return runner
 }
 

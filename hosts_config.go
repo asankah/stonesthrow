@@ -21,10 +21,12 @@ func (h *HostsConfig) Normalize() error {
 		for _, nickname := range host_config.Nickname {
 			existing_host, ok := h.Hosts[nickname]
 			if ok && existing_host == host_config {
-				return fmt.Errorf("Nickname %s is not unique. It's specified twice in %s", nickname, existing_host.Name)
+				return fmt.Errorf("Nickname %s is not unique. It's specified twice in %s",
+					nickname, existing_host.Name)
 			}
 			if ok {
-				return fmt.Errorf("Nickname %s is not unique. It's already assigned to %s", nickname, existing_host.Name)
+				return fmt.Errorf("Nickname %s is not unique. It's already assigned to %s",
+					nickname, existing_host.Name)
 			}
 			h.Hosts[nickname] = host_config
 		}
