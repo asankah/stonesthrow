@@ -91,7 +91,7 @@ func (c *ClientConnection) InitFromFlags(ctx context.Context, f *flag.FlagSet) e
 		return err
 	}
 
-	err = client_config.SelectForClient(&config_file, c.repository)
+	err = client_config.SetFromLocalRepository(&config_file, c.repository)
 	if err != nil {
 		return err
 	}

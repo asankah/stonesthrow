@@ -32,6 +32,24 @@ func TestConfig_ReadFrom(t *testing.T) {
 	if err == nil {
 		t.Fatal("Should've failed to load non-existent platform")
 	}
+
+	err = c.Select(&cf, "", "chrome", "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !c.Host.IsSameHost("a") {
+		t.Fatal("got the wrong host")
+	}
+
+	err = c.Select(&cf, "", "chrome", "win")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !c.Host.IsSameHost("c") {
+		t.Fatal("got the wrong host")
+	}
 }
 
 func TestConfig_SelectRepository(t *testing.T) {
@@ -50,7 +68,7 @@ func TestConfig_SelectRepository(t *testing.T) {
 	}
 
 	var d Config
-	d.SetRepository(c.Repository)
+	d.SetFromRepository(c.Repository)
 
 	if d.ConfigurationFile != &cf {
 		t.Fatal("ConfigurationFile")

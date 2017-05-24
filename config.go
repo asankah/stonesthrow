@@ -38,7 +38,7 @@ func (c *Config) newError(s string, v ...interface{}) error {
 	return NewConfigurationError("Config file: %s: %s", configFile, fmt.Sprintf(s, v...))
 }
 
-func (c *Config) SetRepository(repo *RepositoryConfig) {
+func (c *Config) SetFromRepository(repo *RepositoryConfig) {
 	c.ConfigurationFile = repo.Host.HostsConfig.ConfigurationFile
 	c.Host = repo.Host
 	c.Repository = repo
@@ -58,7 +58,7 @@ func (c *Config) Set(host *HostConfig, repo *RepositoryConfig, platform *Platfor
 	}
 }
 
-func (c *Config) SelectForClient(configFile *ConfigurationFile, repository string) error {
+func (c *Config) SetFromLocalRepository(configFile *ConfigurationFile, repository string) error {
 	err := c.Select(configFile, "", repository, "")
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (c *Config) SelectForClient(configFile *ConfigurationFile, repository strin
 	return nil
 }
 
-func (c *Config) selectRepositoryFromCurrentDir(host_config *HostConfig) (string, error) {
+func (c *Config) getRepositoryNameFromCurrentDir(host_config *HostConfig) (string, error) {
 	current_dir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -104,40 +104,46 @@ func (c *Config) selectRepositoryFromCurrentDir(host_config *HostConfig) (string
 	}
 }
 
-func (c *Config) Select(configFile *ConfigurationFile, host, repository, platform string) error {
-	c.ConfigurationFile = configFile
-	var bad_config_error = c.newError(
-		"can't determine configuration for host=%s, platform=%s, and repository=%s",
-		host, platform, repository)
-
-	var err error
-	if host == "" {
-		localhost, err := os.Hostname()
-		if err != nil {
-			return c.newError("can't select localhost")
-		}
-		c.Host = configFile.HostsConfig.HostByName(localhost)
-
-		if platform != "" && repository != "" && c.Host != nil && !c.Host.SupportsPlatform(platform) {
-			c.Host = configFile.HostsConfig.HostForPlatform(repository, platform)
-		}
-	} else {
-		c.Host = configFile.HostsConfig.HostByName(host)
-	}
-
-	if c.Host == nil {
-		return bad_config_error
-	}
+func (c *Config) Select(config_file *ConfigurationFile, host, repository, platform string) error {
+	c.ConfigurationFile = config_file
 
 	if repository == "" {
-		repository, err = c.selectRepositoryFromCurrentDir(c.Host)
+		localhost, err := os.Hostname()
+		if err != nil {
+			return c.newError("can't determine localhost")
+		}
+		repository, err = c.getRepositoryNameFromCurrentDir(config_file.HostsConfig.HostByName(localhost))
 		if err != nil {
 			return c.newError("can't select repository for current directory")
 		}
 	}
+
+	error_message := fmt.Sprintf("can't determine configuration for host=%s, platform=%s, and repository=%s",
+		host, platform, repository)
+
+	if host == "" {
+		if repository != "" && platform != "" {
+			c.Host = config_file.HostsConfig.HostForPlatform(repository, platform)
+		}
+
+		if c.Host == nil {
+			localhost, err := os.Hostname()
+			if err != nil {
+				return c.newError("can't determine localhost: %s", err.Error())
+			}
+			c.Host = config_file.HostsConfig.HostByName(localhost)
+		}
+	} else {
+		c.Host = config_file.HostsConfig.HostByName(host)
+	}
+
+	if c.Host == nil {
+		return c.newError(error_message)
+	}
+
 	c.Repository, _ = c.Host.Repositories[repository]
 	if c.Repository == nil {
-		return bad_config_error
+		return c.newError(error_message)
 	}
 
 	if platform == "" {
@@ -146,8 +152,8 @@ func (c *Config) Select(configFile *ConfigurationFile, host, repository, platfor
 		c.Platform, _ = c.Repository.Platforms[platform]
 	}
 
-	if c.Platform == nil && len(c.Repository.Platforms) != 0 {
-		return bad_config_error
+	if c.Platform == nil && (len(c.Repository.Platforms) != 0 || platform != "") {
+		return c.newError(error_message)
 	}
 
 	if c.Platform == nil {

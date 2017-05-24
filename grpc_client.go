@@ -44,7 +44,7 @@ func connectViaSsh(ctx context.Context, client_config, server_config Config, rem
 		return nil, err
 	}
 
-	command_line := remote.GetCommand(&server_config)
+	command_line := remote.GetSshPassthroughCommand(&server_config)
 	cmd := exec.CommandContext(ctx, command_line[0], command_line[1:]...)
 
 	writeEnd, err := cmd.StdinPipe()

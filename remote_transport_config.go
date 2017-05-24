@@ -25,7 +25,7 @@ func (r *RemoteTransportConfig) Validate() error {
 	return nil
 }
 
-func (r *RemoteTransportConfig) GetCommand(server *Config) []string {
+func (r *RemoteTransportConfig) GetSshPassthroughCommand(server *Config) []string {
 	command := []string{}
 
 	if r.SshCommand != nil {

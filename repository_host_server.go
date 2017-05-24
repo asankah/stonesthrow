@@ -44,10 +44,10 @@ func (r *RepositoryHostServerImpl) GetGitCommandsForJobEventSender(s JobEventSen
 
 func (r *RepositoryHostServerImpl) GetRepositoryUpstreamPeer(ctx context.Context, repo *RepositoryConfig) (RepositoryHostClient, error) {
 	var remote_config Config
-	remote_config.SetRepository(repo.GitConfig.RemoteHost.Repositories[repo.Name])
+	remote_config.SetFromRepository(repo.GitConfig.RemoteHost.Repositories[repo.Name])
 
 	var local_config Config
-	local_config.SetRepository(repo)
+	local_config.SetFromRepository(repo)
 
 	rpc_connection, err := ConnectTo(ctx, local_config, remote_config)
 	if err != nil {
