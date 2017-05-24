@@ -454,7 +454,9 @@ func RegisterRemoteCommands(ctx context.Context, conn *ClientConnection, command
 	}
 
 	builder_client := NewBuildHostClient(rpc_connection)
-	command_list, err := builder_client.ListScriptCommands(ctx, &ListCommandsOptions{})
+	command_list, err := builder_client.ListScriptCommands(ctx, &ListCommandsOptions{
+		Repository: conn.ServerConfig.Repository.Name,
+		Platform:   conn.ServerConfig.Platform.Name})
 	if err != nil {
 		return err
 	}

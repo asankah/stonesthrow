@@ -69,15 +69,10 @@ func (c *Config) SelectForClient(configFile *ConfigurationFile, repository strin
 	return nil
 }
 
-func (c *Config) selectRepositoryFromCurrentDir(localhost string) (string, error) {
+func (c *Config) selectRepositoryFromCurrentDir(host_config *HostConfig) (string, error) {
 	current_dir, err := os.Getwd()
 	if err != nil {
 		return "", err
-	}
-
-	host_config, ok := c.ConfigurationFile.HostsConfig.Hosts[localhost]
-	if !ok {
-		return "", c.newError("localhost (%s) doesn't have a mapping.", localhost)
 	}
 
 	repo_info_map := make(map[string]os.FileInfo)
@@ -135,7 +130,7 @@ func (c *Config) Select(configFile *ConfigurationFile, host, repository, platfor
 	}
 
 	if repository == "" {
-		repository, err = c.selectRepositoryFromCurrentDir(host)
+		repository, err = c.selectRepositoryFromCurrentDir(c.Host)
 		if err != nil {
 			return c.newError("can't select repository for current directory")
 		}
@@ -151,8 +146,12 @@ func (c *Config) Select(configFile *ConfigurationFile, host, repository, platfor
 		c.Platform, _ = c.Repository.Platforms[platform]
 	}
 
-	if c.Platform == nil {
+	if c.Platform == nil && len(c.Repository.Platforms) != 0 {
 		return bad_config_error
+	}
+
+	if c.Platform == nil {
+		c.Platform = &PlatformConfig{Repository: c.Repository}
 	}
 
 	return nil

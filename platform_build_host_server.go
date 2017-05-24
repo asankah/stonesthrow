@@ -52,9 +52,14 @@ func (p *BuildHostServerImpl) RunScriptCommand(ro *RunOptions, s BuildHost_RunSc
 
 func (p *BuildHostServerImpl) ListScriptCommands(ctx context.Context, l *ListCommandsOptions) (*CommandList, error) {
 	repo, platform := p.GetRepositoryAndPlatform(l)
+	if repo == nil && l.GetPlatform() == "" {
+		return &CommandList{}, nil
+	}
+
 	if repo == nil {
 		return nil, NewInvalidPlatformError("repository %s and platform %s are invalid", l.GetRepository(), l.GetPlatform())
 	}
+
 	return p.GetScriptHostRunner(repo, platform).ListScriptCommands(ctx, p.GetExecutor(nil, platform))
 }
 

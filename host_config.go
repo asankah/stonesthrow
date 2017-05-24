@@ -1,7 +1,6 @@
 package stonesthrow
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -27,10 +26,9 @@ type HostConfig struct {
 	ScriptPath      string                            `json:"scripts"`
 	EndpointStrings map[string]string                 `json:"endpoints"`
 
-	Name              string              `json:"-"`
-	DefaultRepository *RepositoryConfig   `json:"-"`
-	HostsConfig       *HostsConfig        `json:"-"`
-	Endpoints         map[string]Endpoint `json:"-"`
+	Name        string              `json:"-"`
+	HostsConfig *HostsConfig        `json:"-"`
+	Endpoints   map[string]Endpoint `json:"-"`
 }
 
 func (h *HostConfig) IsWildcard() bool {
@@ -54,10 +52,6 @@ func (h *HostConfig) Normalize(hosts *HostsConfig) error {
 		if err != nil {
 			return err
 		}
-		h.DefaultRepository = repo_config
-	}
-	if len(h.Repositories) != 1 {
-		h.DefaultRepository = nil
 	}
 
 	h.Endpoints = make(map[string]Endpoint)
@@ -70,11 +64,11 @@ func (h *HostConfig) Normalize(hosts *HostsConfig) error {
 				HostName: host,
 				Host:     hosts.HostByName(host)}
 			if h.Endpoints[host].Host == nil {
-				return fmt.Errorf("%s: Endpoint host %s can't be resolved",
+				return NewConfigurationError("%s: Endpoint host %s can't be resolved",
 					h.Name, host)
 			}
 		} else {
-			return fmt.Errorf("Address \"%s\" was invalid. Should be of the form <network>,<address>", ep_string)
+			return NewConfigurationError("Address \"%s\" was invalid. Should be of the form <network>,<address>", ep_string)
 		}
 	}
 
@@ -82,8 +76,8 @@ func (h *HostConfig) Normalize(hosts *HostsConfig) error {
 }
 
 func (h *HostConfig) Validate() error {
-	if h.DefaultRepository == nil || h.Name == "" {
-		return fmt.Errorf("not normalized or no repositories")
+	if h.Name == "" {
+		return NewConfigurationError("not normalized or no repositories")
 	}
 
 	for _, r := range h.Repositories {

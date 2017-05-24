@@ -49,7 +49,7 @@ func (h *ServiceHostServerImpl) SelfUpdate(o *SelfUpdateOptions, s ServiceHost_S
 		"-platform", h.Config.Platform.Name,
 		"-repository", h.Config.Repository.Name,
 		"-config", h.Config.ConfigurationFile.FileName}
-	h.Shutdown(&ShutdownOptions{}, s)
+	defer h.Shutdown(&ShutdownOptions{}, s)
 	cmd := exec.Command(updater_command[0], updater_command[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

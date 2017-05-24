@@ -25,7 +25,7 @@ func main() {
 	}
 
 	var config stonesthrow.Config
-	err = config.Select(&configFile, "", *platform, *repository)
+	err = config.Select(&configFile, "", *repository, *platform)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
