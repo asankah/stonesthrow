@@ -240,7 +240,7 @@ class Commands:
     def Sync_Command(self, options):
         """Run 'gclient sync'"""
 
-        stonesthrow.CheckCall(['gclient', 'sync'], cwd=options.source_path)
+        stonesthrow.CheckCall(['gclient', 'sync'], cwd=options.source_path, shell=True)
 
 
 def ConfigureFlags(config):
