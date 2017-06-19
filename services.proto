@@ -1,0 +1,186 @@
+// Generate with '! protoc --go_out=plugins=grpc:. *.proto
+
+syntax = "proto3";
+
+package stonesthrow;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+message ShellCommand {
+  repeated string args = 1;
+  string directory = 2;
+  string host = 3;
+}
+
+message RepositoryState {
+  string repository = 2;
+  string revision = 3;
+}
+
+message RunState {
+  google.protobuf.Timestamp start_time = 1;
+  bool running = 2;
+  google.protobuf.Timestamp end_time = 3;
+  int32 return_code = 4;
+  string result = 5;
+}
+
+message Task {
+  int32 id = 1;
+  ShellCommand command = 2;
+  RunState state = 3;
+  string host = 4;
+}
+
+message LogEvent {
+  enum Severity {
+    ERROR = 0;
+    INFO = 1;
+    DEBUG = 2;
+  }
+  string host = 1;
+  string msg = 2;
+  Severity severity = 3;
+}
+
+message CommandOutputEvent {
+  enum Stream {
+    OUT = 0;
+    ERR = 1;
+  }
+
+  Stream stream = 1;
+  bytes output = 2;
+}
+
+message TaskEvent {
+  google.protobuf.Timestamp time = 1;
+  string host = 2;
+
+  repeated LogEvent log = 3;
+  repeated Task task = 4;
+  repeated CommandOutputEvent output = 5;
+}
+
+message RunCommandOptions {
+  string repository = 1;
+  string platform = 2;
+  ShellCommand command = 3;
+}
+
+message PingOptions {
+  string ping = 1;
+}
+
+message PingResult {
+  string pong = 1;
+}
+
+message FetchFileOptions {
+  string repository = 1;
+  string platform = 2;
+  string path = 3;
+  string base_path = 4;
+}
+
+message FetchFileResult {
+  RunState state = 1;
+  bytes data = 2;
+}
+
+message Command {
+  repeated string name = 1;
+  string description = 2;
+  string usage = 3;
+  bool depends_on_source = 4;
+  bool visible = 5;
+}
+
+message ListCommandsOptions {
+  string repository = 1;
+  string platform = 2;
+}
+
+message ListCommandsResult {
+  repeated Command command = 1;
+}
+
+message ListJobsOptions {
+  bool include_completed = 1;
+}
+
+message ListJobsResult {
+  repeated Task task = 1;
+}
+
+message KillJobsOptions {
+  repeated int32 id = 1;
+}
+
+message KillJobsResult {
+  repeated Task task = 1;
+}
+
+message ShutdownOptions {
+}
+
+message ShutdownResult {
+  RunState state = 1;
+}
+
+message SelfUpdateOptions {
+}
+
+message SelfUpdateResult {
+  RunState state = 1;
+}
+
+message Revision {
+  string name = 1;
+  string id = 2;
+}
+
+message ExtractRefOptions {
+  string repository = 1;
+  Revision revision = 1;
+  repeated Revision base_revision = 3;
+}
+
+message ExtractRefResult {
+  bytes bundle = 1;
+}
+
+message ApplyRefsOptions {
+  bytes bundle = 1;
+}
+
+message ApplyRefsResult {
+  RunState state = 1;
+}
+
+message GetKnownRefsOptions {
+  string repository = 1;
+}
+
+message GetKnownRefsResult {
+  repeated Revision revision = 1;
+}
+
+service Host {
+  rpc Ping(PingOptions) returns (PingResult);
+  rpc ListJobs(ListJobsOptions) returns (stream ListJobsResult);
+  rpc KillJobs(KillJobsOptions) returns (stream KillJobsResult);
+  rpc Shutdown(ShutdownOptions) returns (ShutdownResult);
+  rpc SelfUpdate(SelfUpdateOptions) returns (SelfUpdateResult);
+
+  rpc RunCommand(RunCommandOptions) returns (stream TaskEvent);
+  rpc ListCommands(ListCommandsOptions) returns (ListCommandsResult);
+
+  rpc FetchFile(FetchFileOptions) returns (stream FetchFileResult);
+
+  rpc ExtractRefs(ExtractRefOptions) returns (stream ExtractRefResult);
+  rpc ApplyRefs(ApplyRefsOptions) returns (stream ApplyRefsResult);
+  rpc GetKnownRefs(GetKnownRefsOptions) returns (GetKnownRefsOptions);
+}
+
